@@ -1,0 +1,74 @@
+# Translation — Windows 离线翻译工具
+
+常驻托盘的 Windows 翻译工具：一个全局热键读取剪切板，文字直接翻译，图片自动 OCR 后翻译，单个英文单词走离线词典。**默认全程离线**——不联网、无遥测、不记录剪切板内容。
+
+## 功能特性
+
+- **全局热键翻译**：默认 `Ctrl+Alt+F9`（可配置），复制文字后一键出译文
+- **中英自动识别**：自动判断方向，中↔英双向翻译
+- **图片 OCR 翻译**：剪切板截图自动 PP-OCRv5 中英识别后翻译，保留换行
+- **离线词典**：单个英文单词走 ECDICT 词典——多义项、词性、词形变化；变形词自动还原（`classes` → `class`），未命中自动回退句子翻译
+- **常驻托盘**：单实例、可选开机启动、窗口位置与尺寸记忆
+- **完全离线**：翻译核心为本地 C++（CTranslate2 + oneDNN + SentencePiece），无任何网络请求
+
+## 实测性能
+
+Ryzen 9 7945HX（16C/32T）实测：
+
+| 场景 | 结果 |
+|---|---|
+| 原生翻译 zh→en | P50 38.6ms，P95 48ms |
+| 原生翻译 en→zh | P50 43.8ms，P95 51ms |
+| 热键 → 窗口可见 | 43–52ms |
+| 文字剪切板 → 译文 | 137–147ms |
+| 图片 OCR（900×320，预热后） | 260ms |
+| 翻译模型体积 | 75.9MB/方向 |
+| OCR 模型体积 | 约 21.5MB |
+
+## 快速上手
+
+1. 按环境要求与 [BUILD.md](docs/BUILD.md) 构建应用并准备模型（翻译模型需转换，OCR 模型需下载，词典数据可选）。
+2. 运行 `Translation.App.exe`，应用常驻托盘。
+3. 选中文字 → `Ctrl+C` → `Ctrl+Alt+F9`，约 0.1 秒出译文。
+
+完整功能说明与使用教程见 **[docs/USAGE.md](docs/USAGE.md)**。
+
+## 项目结构
+
+```
+src/Translation.App/        WPF 应用
+native/translation_core/    C ABI 原生翻译核心（C++）
+models/                     模型存放说明（模型文件不入 git）
+scripts/                    构建/部署/词典数据脚本
+docs/                       架构、构建、使用文档
+tests/                      单元测试（dotnet test）
+```
+
+## 文档
+
+- [使用教程](docs/USAGE.md) — 安装、热键、OCR、词典、设置、FAQ
+- [构建说明](docs/BUILD.md) — 环境要求、一键构建、模型转换与下载
+- [架构说明](docs/ARCHITECTURE.md) — 模块划分、热键/剪切板流程、线程模型、性能关键点
+
+## 已知限制
+
+- 在线翻译引擎尚未接入，当前仅离线引擎。
+- 首次运行窗口居中主屏；跟随鼠标所在显示器定位在后续版本。
+- 无安装包与自动更新，需从源码构建。
+- 热键与 OCR 使用固定默认模型；模型管理/多语言在后续版本。
+
+## 许可证
+
+代码以 [MIT](LICENSE) 许可发布。依赖与模型的许可证：
+
+| 组件 | 许可证 |
+|---|---|
+| CTranslate2 | MIT |
+| oneDNN | Apache-2.0 |
+| SentencePiece | Apache-2.0 |
+| RapidOcrNet / RapidOCR / PP-OCRv5 模型 | Apache-2.0 |
+| OPUS-MT zh-en 模型 | CC-BY-4.0 |
+| OPUS-MT en-zh 模型 | Apache-2.0 |
+| ECDICT 词典数据 | MIT |
+
+其中 CC-BY-4.0 模型要求保留署名；再分发时请在附带材料中注明模型来源（详见 [models/README.md](models/README.md)）。
