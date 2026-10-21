@@ -26,7 +26,11 @@ if (-not $CsvPath) {
         Write-Host "下载 $csvUrl （约 66MB）..."
         $temporaryPath = "$CsvPath.download"
         try {
-            Invoke-WebRequest -Uri $csvUrl -OutFile $temporaryPath
+            # CI 上 Invoke-WebRequest 下载大文件易中断，curl 自带重试更可靠
+            & curl.exe -L --fail --silent --show-error --retry 3 --retry-delay 5 -o $temporaryPath $csvUrl
+            if ($LASTEXITCODE -ne 0) {
+                throw "下载失败 (curl exit $LASTEXITCODE)"
+            }
             Move-Item -Force $temporaryPath $CsvPath
         }
         finally {

@@ -48,19 +48,21 @@ jobs:
 
       # 匿名访问者看不到 step 日志：失败时把日志写入 job summary，并推送到
       # ci-logs 分支（raw / contents API 匿名可读）供离线诊断
-      - name: Native build failure log
+      - name: Publish failure logs
         if: failure()
         shell: pwsh
         run: |
-          if (-not (Test-Path native-build.log)) { exit 0 }
-          $log = Get-Content native-build.log
-          "## Native build log (tail 150)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          $log | Select-Object -Last 150 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $logs = Get-ChildItem -File -Filter '*-build.log' | Where-Object Length -gt 0
+          if (-not $logs) { exit 0 }
+          foreach ($f in $logs) {
+            "## $($f.Name) (tail 120)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Get-Content $f.FullName -Tail 120 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch --orphan ci-logs
-          git add native-build.log
-          git commit -m "native build log (run ${{ github.run_id }})"
+          git add $logs.Name
+          git commit -m "build failure logs (run ${{ github.run_id }})"
           git push origin ci-logs --force
 
       # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
@@ -75,7 +77,7 @@ jobs:
       - name: Build dictionary
         if: steps.dict-cache.outputs.cache-hit != 'true'
         shell: pwsh
-        run: .\scripts\build-dictionary.ps1 -Force
+        run: .\scripts\build-dictionary.ps1 -Force *>&1 | Tee-Object -FilePath dictionary-build.log
 
       - name: Download OCR models
         shell: pwsh
