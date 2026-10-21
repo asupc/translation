@@ -33,7 +33,20 @@ jobs:
 
       - name: Build native core
         shell: pwsh
-        run: .\scripts\build-native.ps1 -Jobs 4
+        run: .\scripts\build-native.ps1 -Jobs 4 *>&1 | Tee-Object -FilePath native-build.log
+
+      # 匿名访问者看不到 step 日志，失败时把关键输出写入 job summary（匿名可见）
+      - name: Native build failure log
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path native-build.log) {
+            $log = Get-Content native-build.log
+            "## Native build log (head 60)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            $log | Select-Object -First 60 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            "## Native build log (tail 150)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            $log | Select-Object -Last 150 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
 
       # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
       - uses: actions/cache@v4
