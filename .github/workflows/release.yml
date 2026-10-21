@@ -35,18 +35,22 @@ jobs:
         shell: pwsh
         run: .\scripts\build-native.ps1 -Jobs 4 *>&1 | Tee-Object -FilePath native-build.log
 
-      # 匿名访问者看不到 step 日志，失败时把关键输出写入 job summary（匿名可见）
+      # 匿名访问者看不到 step 日志：失败时把日志写入 job summary，并推送到
+      # ci-logs 分支（raw / contents API 匿名可读）供离线诊断
       - name: Native build failure log
         if: failure()
         shell: pwsh
         run: |
-          if (Test-Path native-build.log) {
-            $log = Get-Content native-build.log
-            "## Native build log (head 60)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            $log | Select-Object -First 60 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            "## Native build log (tail 150)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            $log | Select-Object -Last 150 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
+          if (-not (Test-Path native-build.log)) { exit 0 }
+          $log = Get-Content native-build.log
+          "## Native build log (tail 150)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $log | Select-Object -Last 150 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --orphan ci-logs
+          git add native-build.log
+          git commit -m "native build log (run ${{ github.run_id }})"
+          git push origin ci-logs --force
 
       # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
       - uses: actions/cache@v4
