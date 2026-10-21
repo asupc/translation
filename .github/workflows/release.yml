@@ -46,25 +46,6 @@ jobs:
             native/build
           key: native-win-v1-${{ github.run_id }}
 
-      # 匿名访问者看不到 step 日志：失败时把日志写入 job summary，并推送到
-      # ci-logs 分支（raw / contents API 匿名可读）供离线诊断
-      - name: Publish failure logs
-        if: failure()
-        shell: pwsh
-        run: |
-          $logs = Get-ChildItem -File -Filter '*-build.log' | Where-Object Length -gt 0
-          if (-not $logs) { exit 0 }
-          foreach ($f in $logs) {
-            "## $($f.Name) (tail 120)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            Get-Content $f.FullName -Tail 120 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git switch --orphan ci-logs
-          git add $logs.Name
-          git commit -m "build failure logs (run ${{ github.run_id }})"
-          git push origin ci-logs --force
-
       # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
       - uses: actions/cache@v4
         id: dict-cache
@@ -164,3 +145,22 @@ jobs:
             - [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（提供 `vcomp140.dll`）
 
             翻译 / OCR / 词典模型已内置，全程离线运行。完整说明见仓库 [README](https://github.com/asupc/translation) 与 `docs/USAGE.md`。
+
+      # 必须位于 job 末尾：if: failure() 只对执行时刻之前的步骤生效，
+      # 放在最后才能收集任何构建步骤的失败日志
+      - name: Publish failure logs
+        if: failure()
+        shell: pwsh
+        run: |
+          $logs = Get-ChildItem -File -Filter '*-build.log' | Where-Object Length -gt 0
+          if (-not $logs) { exit 0 }
+          foreach ($f in $logs) {
+            "## $($f.Name) (tail 120)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Get-Content $f.FullName -Tail 120 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --orphan ci-logs
+          git add $logs.Name
+          git commit -m "build failure logs (run ${{ github.run_id }})"
+          git push origin ci-logs --force
