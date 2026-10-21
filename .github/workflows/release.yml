@@ -11,6 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # Windows runner 的 Python 默认 cp1252 输出，中文日志会 UnicodeEncodeError
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v4
 
