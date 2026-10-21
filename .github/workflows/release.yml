@@ -24,16 +24,27 @@ jobs:
 
       # 原生构建缓存：第三方源码 + 构建产物。build-native.ps1 幂等，
       # 命中后仅重编 translation_core（秒级）；未命中约 30-40 分钟。
-      - uses: actions/cache@v4
+      # restore/save 拆分：失败也保存，重试时 oneDNN 等成果可复用。
+      - uses: actions/cache/restore@v4
         with:
           path: |
             native/third_party
             native/build
-          key: native-win-v1
+          key: native-win-v1-${{ github.run_id }}
+          restore-keys: native-win-v1-
 
       - name: Build native core
         shell: pwsh
         run: .\scripts\build-native.ps1 -Jobs 4 *>&1 | Tee-Object -FilePath native-build.log
+
+      - name: Save native cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            native/third_party
+            native/build
+          key: native-win-v1-${{ github.run_id }}
 
       # 匿名访问者看不到 step 日志：失败时把日志写入 job summary，并推送到
       # ci-logs 分支（raw / contents API 匿名可读）供离线诊断

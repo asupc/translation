@@ -116,6 +116,9 @@ if ($Force -or -not (Test-Path $ct2Library)) {
         '-A', 'x64',
         '-DCMAKE_BUILD_TYPE=Release',
         '-DCMAKE_CXX_STANDARD=17',
+        # CI 的 CMake 4.x 移除了对 cmake_minimum_required(<3.5) 的兼容，
+        # CT2 子模块 cpu_features 声明过老；用官方兼容开关放行
+        '-DCMAKE_POLICY_VERSION_MINIMUM=3.5',
         '-DWITH_MKL=OFF',
         '-DWITH_DNNL=ON',
         '-DWITH_RUY=OFF',
