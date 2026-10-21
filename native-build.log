@@ -1,0 +1,119 @@
+Building translation_core...
+-- VERSION: 0.2.2
+-- Populating abseil-cpp
+-- Configuring done (0.2s)
+-- Generating done (0.3s)
+-- Build files have been written to: D:/a/translation/translation/native/build/core/sentencepiece/abseil-cpp-subbuild
+MSBuild version 18.10.1-1.26427.6+3cd27c13e for .NET Framework
+
+  Performing update step for 'abseil-cpp-populate'
+  -- Already at requested tag: 20260526.0
+  No patch step for 'abseil-cpp-populate'
+  No configure step for 'abseil-cpp-populate'
+  No build step for 'abseil-cpp-populate'
+  No install step for 'abseil-cpp-populate'
+  No test step for 'abseil-cpp-populate'
+  Completed 'abseil-cpp-populate'
+-- Configuring done (14.3s)
+-- Generating done (1.8s)
+-- Build files have been written to: D:/a/translation/translation/native/build/core
+MSBuild version 18.10.1-1.26427.6+3cd27c13e for .NET Framework
+
+  absl_log_severity.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_log_severity.lib
+  absl_raw_logging_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_raw_logging_internal.lib
+  absl_spinlock_wait.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_spinlock_wait.lib
+  absl_civil_time.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\time\Release\absl_civil_time.lib
+  absl_source_location.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\types\Release\absl_source_location.lib
+  absl_exponential_biased.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\profiling\Release\absl_exponential_biased.lib
+  absl_cordz_functions.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_cordz_functions.lib
+  absl_debugging_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_debugging_internal.lib
+  absl_base.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_base.lib
+  absl_throw_delegate.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_throw_delegate.lib
+  absl_utf8_for_code_point.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_utf8_for_code_point.lib
+  absl_time_zone.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\time\Release\absl_time_zone.lib
+  absl_tracing_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_tracing_internal.lib
+  absl_flags_commandlineflag_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_commandlineflag_internal.lib
+  absl_malloc_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_malloc_internal.lib
+  absl_city.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\hash\Release\absl_city.lib
+  absl_int128.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\numeric\Release\absl_int128.lib
+  absl_crc_cpu_detect.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\crc\Release\absl_crc_cpu_detect.lib
+  absl_crc_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\crc\Release\absl_crc_internal.lib
+  absl_strings_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_strings_internal.lib
+  absl_decode_rust_punycode.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_decode_rust_punycode.lib
+  absl_stacktrace.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_stacktrace.lib
+  absl_graphcycles_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\synchronization\Release\absl_graphcycles_internal.lib
+  absl_leak_check.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_leak_check.lib
+  absl_log_internal_nullguard.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_nullguard.lib
+  absl_strerror.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\base\Release\absl_strerror.lib
+  absl_log_internal_conditions.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_conditions.lib
+  absl_demangle_rust.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_demangle_rust.lib
+  absl_random_internal_platform.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_platform.lib
+  absl_random_seed_gen_exception.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_seed_gen_exception.lib
+  absl_strings.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_strings.lib
+  absl_random_internal_randen_hwaes_impl.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_randen_hwaes_impl.lib
+  sentencepiece-static.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\src\Release\sentencepiece.lib
+  absl_random_internal_seed_material.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_seed_material.lib
+  absl_log_internal_fnmatch.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_fnmatch.lib
+  absl_random_distributions.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_distributions.lib
+  absl_random_internal_randen_slow.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_randen_slow.lib
+  absl_time.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\time\Release\absl_time.lib
+  absl_log_internal_proto.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_proto.lib
+  absl_kernel_timeout_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\synchronization\Release\absl_kernel_timeout_internal.lib
+  absl_log_internal_globals.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_globals.lib
+  absl_str_format_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_str_format_internal.lib
+  absl_random_internal_randen_hwaes.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_randen_hwaes.lib
+  absl_flags_commandlineflag.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_commandlineflag.lib
+  absl_random_internal_randen.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_randen.lib
+  absl_hash.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\hash\Release\absl_hash.lib
+  absl_crc32c.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\crc\Release\absl_crc32c.lib
+  absl_flags_marshalling.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_marshalling.lib
+  absl_log_internal_format.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_format.lib
+  absl_log_internal_structured_proto.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_structured_proto.lib
+  absl_log_entry.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_entry.lib
+  absl_flags_private_handle_accessor.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_private_handle_accessor.lib
+  absl_crc_cord_state.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\crc\Release\absl_crc_cord_state.lib
+  absl_demangle_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_demangle_internal.lib
+  absl_log_sink.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_sink.lib
+  absl_cord_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_cord_internal.lib
+  absl_symbolize.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_symbolize.lib
+  absl_examine_stack.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\debugging\Release\absl_examine_stack.lib
+  absl_synchronization.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\synchronization\Release\absl_synchronization.lib
+  absl_flags_program_name.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_program_name.lib
+  absl_cordz_handle.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_cordz_handle.lib
+  absl_hashtablez_sampler.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\container\Release\absl_hashtablez_sampler.lib
+  absl_flags_config.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_config.lib
+  absl_vlog_config_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_vlog_config_internal.lib
+  absl_random_internal_entropy_pool.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_internal_entropy_pool.lib
+  absl_cordz_info.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_cordz_info.lib
+  absl_log_globals.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_globals.lib
+  absl_cord.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\strings\Release\absl_cord.lib
+  absl_log_initialize.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_initialize.lib
+  absl_log_internal_log_sink_set.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_log_sink_set.lib
+  absl_status.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\status\Release\absl_status.lib
+  absl_raw_hash_set.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\container\Release\absl_raw_hash_set.lib
+  absl_status_builder.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\status\Release\absl_status_builder.lib
+  absl_flags_reflection.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_reflection.lib
+  absl_log_internal_message.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_message.lib
+  absl_random_seed_sequences.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\random\Release\absl_random_seed_sequences.lib
+  absl_flags_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_internal.lib
+  absl_flags_usage_internal.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_usage_internal.lib
+  absl_log_internal_check_op.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\log\Release\absl_log_internal_check_op.lib
+  absl_flags_usage.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_usage.lib
+  absl_flags_parse.vcxproj -> D:\a\translation\translation\native\build\core\sentencepiece\third_party\abseil-cpp\absl\flags\Release\absl_flags_parse.lib
+  translation_core.cpp
+D:\a\translation\translation\native\third_party\CTranslate2\include\ctranslate2\utils.h(33,60): warning C4566: character represented by universal-character-name '\uFFE8' cannot be represented in the current code page (1252) [D:\a\translation\translation\native\build\core\translation_core.vcxproj]
+  (compiling source file '../../translation_core/translation_core.cpp')
+  
+     Creating library D:/a/translation/translation/native/build/core/Release/translation_core.lib and object D:/a/translation/translation/native/build/core/Release/translation_core.exp
+  translation_core.vcxproj -> D:\a\translation\translation\native\build\core\Release\translation_core.dll
+
+Native build complete: D:\a\translation\translation\native\build
+
+Name                   Length
+----                   ------
+ctranslate2.dll       6360576
+ctranslate2.lib      22082522
+dnnl.dll             35164672
+dnnl.lib               121896
+translation_core.dll   644608
+
