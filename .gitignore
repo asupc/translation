@@ -1,0 +1,29 @@
+# .NET build outputs
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Native build outputs and vendored sources
+native/build/
+native/third_party/
+
+# Large model files (distribute separately; keep models/README.md)
+models/translation/
+models/ocr/
+models/dictionary/
+
+# Phase 0 spike artifacts
+spikes/
+
+# Publish artifacts
+publish/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Logs and local files
+*.log
