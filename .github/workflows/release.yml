@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 原生构建缓存：第三方源码 + 构建产物。build-native.ps1 幂等，
+      # 命中后仅重编 translation_core（秒级）；未命中约 30-40 分钟。
+      - uses: actions/cache@v4
+        with:
+          path: |
+            native/third_party
+            native/build
+          key: native-win-v1
+
+      - name: Build native core
+        shell: pwsh
+        run: .\scripts\build-native.ps1 -Jobs 4
+
+      # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
+      - uses: actions/cache@v4
+        id: dict-cache
+        with:
+          path: |
+            models/dictionary/ecdict.csv
+            models/dictionary/ecdict.sqlite
+          key: ecdict-v1
+
+      - name: Build dictionary
+        if: steps.dict-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: .\scripts\build-dictionary.ps1 -Force
+
+      - name: Download OCR models
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = 'models/ocr/v5'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $base = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0'
+          $files = @(
+            @{ Url = "$base/onnx/PP-OCRv5/det/ch_PP-OCRv5_det_mobile.onnx"; Name = 'ch_PP-OCRv5_det_mobile.onnx' },
+            @{ Url = "$base/onnx/PP-OCRv5/cls/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx"; Name = 'ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx' },
+            @{ Url = "$base/onnx/PP-OCRv5/rec/ch_PP-OCRv5_rec_mobile.onnx"; Name = 'ch_PP-OCRv5_rec_mobile.onnx' },
+            @{ Url = "$base/paddle/PP-OCRv5/rec/ch_PP-OCRv5_rec_mobile/ppocrv5_dict.txt"; Name = 'ppocrv5_dict.txt' }
+          )
+          foreach ($file in $files) {
+            $target = Join-Path $dir $file.Name
+            if (Test-Path $target) { continue }
+            Invoke-WebRequest -Uri $file.Url -OutFile $target
+          }
+          Get-ChildItem $dir | Select-Object Name, Length
+
+      # 翻译模型缓存：转换一次约 10 分钟（含下载原始模型与 pip 依赖）
+      - uses: actions/cache@v4
+        id: mt-cache
+        with:
+          path: models/translation
+          key: mt-models-v1
+
+      - name: Convert translation models
+        if: steps.mt-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          pip install ctranslate2 transformers sentencepiece torch
+          ct2-transformers-converter --model Helsinki-NLP/opus-mt-zh-en `
+            --output_dir models/translation/opus-mt-zh-en-int8 `
+            --quantization int8 --copy_files source.spm target.spm vocab.json --force
+          ct2-transformers-converter --model Helsinki-NLP/opus-mt-en-zh `
+            --output_dir models/translation/opus-mt-en-zh-int8 `
+            --quantization int8 --copy_files source.spm target.spm vocab.json --force
+
+      - name: Publish app
+        run: dotnet publish src/Translation.App/Translation.App.csproj -c Release -r win-x64 --self-contained false -o publish/win-x64
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { "run-$($env:GITHUB_RUN_NUMBER)" }
+          $staging = 'publish/package/Translation'
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          Copy-Item 'publish/win-x64/*' $staging -Recurse -Force
+          Copy-Item 'models/translation' "$staging/models/translation" -Recurse
+          Copy-Item 'models/ocr/v5' "$staging/models/ocr" -Recurse
+          New-Item -ItemType Directory -Force "$staging/models/dictionary" | Out-Null
+          Copy-Item 'models/dictionary/ecdict.sqlite' "$staging/models/dictionary/"
+          $zip = "Translation-win-x64-$version.zip"
+          Compress-Archive -Path $staging -DestinationPath $zip
+          Add-Content -Path $env:GITHUB_ENV -Value "version=$version"
+          Get-Item $zip | Select-Object Name, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Translation-win-x64-${{ env.version }}
+          path: Translation-win-x64-*.zip
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Translation-win-x64-*.zip
+          generate_release_notes: true
+          body: |
+            ## 使用方法
+
+            1. 解压 zip 到任意目录
+            2. 运行 `Translation.App.exe`，应用常驻托盘
+            3. 选中文字 → `Ctrl+C` → `Ctrl+Alt+F9`
+
+            ## 系统要求
+
+            - Windows 10/11 x64
+            - [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)（`arm64` 不支持）
+            - [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（提供 `vcomp140.dll`）
+
+            翻译 / OCR / 词典模型已内置，全程离线运行。完整说明见仓库 [README](https://github.com/asupc/translation) 与 `docs/USAGE.md`。
