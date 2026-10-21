@@ -86,6 +86,8 @@ if ($Force -or -not (Test-Path $dnnlLibrary)) {
         '-G', 'Visual Studio 17 2022',
         '-A', 'x64',
         '-DCMAKE_BUILD_TYPE=Release',
+        # CI 上较新的 MSVC 对 <optional> 等头文件严格检查语言标准，显式固定 C++17
+        '-DCMAKE_CXX_STANDARD=17',
         '-DDNNL_BUILD_TESTS=OFF',
         '-DDNNL_BUILD_EXAMPLES=OFF',
         '-DDNNL_LIBRARY_TYPE=SHARED',
@@ -113,6 +115,7 @@ if ($Force -or -not (Test-Path $ct2Library)) {
         '-G', 'Visual Studio 17 2022',
         '-A', 'x64',
         '-DCMAKE_BUILD_TYPE=Release',
+        '-DCMAKE_CXX_STANDARD=17',
         '-DWITH_MKL=OFF',
         '-DWITH_DNNL=ON',
         '-DWITH_RUY=OFF',
