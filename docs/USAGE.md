@@ -7,7 +7,16 @@
 
 ## 安装
 
-当前版本需从源码构建，步骤见 [BUILD.md](BUILD.md)。构建完成后得到可执行文件
+**方式一：发布包（推荐）**
+
+从 [Releases](https://github.com/asupc/translation/releases) 下载 `Translation-win-x64-*.zip`，解压到任意目录。模型已内置。首次运行前需安装：
+
+- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（提供 OpenMP 运行库 `vcomp140.dll`）
+
+**方式二：从源码构建**
+
+按 [BUILD.md](BUILD.md) 构建应用并准备模型。构建完成后得到可执行文件
 `src\Translation.App\bin\Release\net10.0-windows\Translation.App.exe`（或 `build-deploy.ps1`
 部署目录中的 `Translation.App.exe`），模型位于其旁的 `models\` 目录。
 

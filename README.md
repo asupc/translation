@@ -27,9 +27,18 @@ Ryzen 9 7945HX（16C/32T）实测：
 
 ## 快速上手
 
-1. 按环境要求与 [BUILD.md](docs/BUILD.md) 构建应用并准备模型（翻译模型需转换，OCR 模型需下载，词典数据可选）。
-2. 运行 `Translation.App.exe`，应用常驻托盘。
-3. 选中文字 → `Ctrl+C` → `Ctrl+Alt+F9`，约 0.1 秒出译文。
+**方式一：下载发布包（推荐）**
+
+从 [Releases](https://github.com/asupc/translation/releases) 下载 `Translation-win-x64-*.zip`，解压后运行 `Translation.App.exe`。翻译 / OCR / 词典模型已内置，无需另外下载；需安装 .NET 10 Desktop Runtime 与 VC++ Redistributable（详见 Release 说明）。
+
+**方式二：从源码构建**
+
+按 [BUILD.md](docs/BUILD.md) 构建应用并准备模型（翻译模型需转换，OCR 模型需下载，词典数据可选）。
+
+**使用**
+
+1. 运行 `Translation.App.exe`，应用常驻托盘。
+2. 选中文字 → `Ctrl+C` → `Ctrl+Alt+F9`，约 0.1 秒出译文。
 
 完整功能说明与使用教程见 **[docs/USAGE.md](docs/USAGE.md)**。
 
@@ -54,7 +63,7 @@ tests/                      单元测试（dotnet test）
 
 - 在线翻译引擎尚未接入，当前仅离线引擎。
 - 首次运行窗口居中主屏；跟随鼠标所在显示器定位在后续版本。
-- 无安装包与自动更新，需从源码构建。
+- 以 zip 包分发，无安装器与自动更新。
 - 热键与 OCR 使用固定默认模型；模型管理/多语言在后续版本。
 
 ## 许可证
