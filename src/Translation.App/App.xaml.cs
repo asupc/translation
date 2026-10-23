@@ -98,7 +98,6 @@ public partial class App : System.Windows.Application
 
         StartShowListener();
         _coreInitTask = InitializeCoreAsync();
-        _ = WarmOcrAsync();
     }
 
     private static void SignalExistingInstance()
@@ -172,19 +171,6 @@ public partial class App : System.Windows.Application
         if (!CoreReady)
         {
             throw new InvalidOperationException(CoreError ?? "翻译模型尚未加载完成");
-        }
-    }
-
-    private async Task WarmOcrAsync()
-    {
-        try
-        {
-            await EnsureOcrAsync();
-            AppLog.Write("ocr warm");
-        }
-        catch (Exception error)
-        {
-            AppLog.Write($"ocr warm failed: {error.Message}");
         }
     }
 
