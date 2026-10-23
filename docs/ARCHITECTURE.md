@@ -58,7 +58,7 @@ void translation_engine_destroy(TranslationEngine* engine);
 ## OCR
 
 - RapidOcrNet 4.2.0 + PP-OCRv5 中文 mobile 模型（det/cls/rec + dict，约 21.5MB）。
-- 启动时后台预热（`WarmOcrAsync`），避免第一次图片 OCR 承担模型加载时间。
+- 懒加载：首次图片翻译才初始化（`EnsureOcrAsync`），空闲期不占 OCR 内存（约 150–200MB：session + 推理 arena）。
 - `BitmapSource` → PNG → `SKBitmap` → `RapidOcr.Detect`。
 - 默认关闭角度分类（`DoAngle=false`），识别并行度 1。
 - 中英混排模型同时支持英文；识别文本保留换行，交给翻译层。
@@ -82,7 +82,7 @@ void translation_engine_destroy(TranslationEngine* engine);
   2. 设置加载
   3. 创建窗口（`--tray` 时不显示）
   4. 注册热键、托盘
-  5. 后台加载翻译模型 + 预热 OCR
+  5. 后台加载翻译模型（OCR 懒加载，首次图片翻译才初始化）
 - 单实例：命名 Mutex + 命名 EventWaitHandle；第二个实例设置事件后退出，第一个实例显示窗口。
 
 ## 性能关键点
@@ -90,7 +90,7 @@ void translation_engine_destroy(TranslationEngine* engine);
 - CTranslate2 用 oneDNN 后端，`DNNL_CPU_RUNTIME=OMP`；CT2 自身用 `OPENMP_RUNTIME=COMP`。
 - 运行时设置 `OMP_NUM_THREADS`（默认 8）；16 逻辑线程全开会明显变慢。
 - `compute_type=int8`；模型 int8 量化后约 75.9MB/方向。
-- 翻译模型启动时加载；OCR 模型启动时预热。
+- 翻译模型启动时加载；OCR 模型懒加载（首次图片翻译时初始化）。
 - 窗口常驻托盘，热键路径不承担进程冷启动。
 - 翻译窗口使用不透明窗口 + `WindowChrome`，支持边缘缩放；Windows 11 用 DWM 圆角。
 
