@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
@@ -184,24 +183,7 @@ public partial class App : System.Windows.Application
     private void OnTranslateHotkey()
     {
         AppLog.Write("translate hotkey fired");
-        var stopwatch = Stopwatch.StartNew();
-        var content = ClipboardHelper.TryGetContent();
-
-        if (content.Text is not null)
-        {
-            AppLog.Write($"clipboard text length={content.Text.Length}");
-            _mainWindow?.ShowForText(content.Text, stopwatch);
-        }
-        else if (content.Image is not null)
-        {
-            AppLog.Write($"clipboard image {content.Image.PixelWidth}x{content.Image.PixelHeight}");
-            _mainWindow?.ShowForImage(content.Image, stopwatch);
-        }
-        else
-        {
-            AppLog.Write("clipboard empty");
-            _mainWindow?.ShowForText(null, stopwatch);
-        }
+        _mainWindow?.ShowCleared();
     }
 
     private static System.Drawing.Icon LoadTrayIcon()
@@ -332,6 +314,7 @@ public partial class App : System.Windows.Application
             _settings.AutoStart = draft.AutoStart;
             SaveSettings();
             _mainWindow?.SetStatus("设置已保存");
+            _mainWindow?.SetHotkeyHint(hotkey.ToString());
             AppLog.Write($"settings saved hotkey={_settings.Hotkey} autostart={_settings.AutoStart}");
         }
         catch (Exception exception)

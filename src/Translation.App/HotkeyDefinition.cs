@@ -8,6 +8,37 @@ public sealed record HotkeyDefinition(int Modifiers, int VirtualKey)
         NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT,
         (int)Keys.F9);
 
+    /// <summary>由按键捕获结果构造热键（WPF 修饰键转 RegisterHotKey 的 MOD 位）。</summary>
+    public static HotkeyDefinition FromKeys(
+        System.Windows.Input.ModifierKeys modifiers,
+        System.Windows.Input.Key key)
+    {
+        var native = 0;
+        if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))
+        {
+            native |= NativeMethods.MOD_CONTROL;
+        }
+
+        if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Alt))
+        {
+            native |= NativeMethods.MOD_ALT;
+        }
+
+        if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift))
+        {
+            native |= NativeMethods.MOD_SHIFT;
+        }
+
+        if (modifiers.HasFlag(System.Windows.Input.ModifierKeys.Windows))
+        {
+            native |= NativeMethods.MOD_WIN;
+        }
+
+        return new HotkeyDefinition(
+            native,
+            System.Windows.Input.KeyInterop.VirtualKeyFromKey(key));
+    }
+
     public static bool TryParse(
         string? text,
         out HotkeyDefinition definition,

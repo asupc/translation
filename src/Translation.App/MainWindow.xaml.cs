@@ -25,6 +25,19 @@ public partial class MainWindow : Window
             Left = left;
             Top = top;
         }
+
+        if (!HotkeyDefinition.TryParse(settings.Hotkey, out var hotkey, out _))
+        {
+            hotkey = HotkeyDefinition.Default;
+        }
+
+        SetHotkeyHint(hotkey.ToString());
+    }
+
+    /// <summary>底部提示行的呼出热键与当前设置保持同步。</summary>
+    public void SetHotkeyHint(string hotkeyText)
+    {
+        HintText.Text = $"{hotkeyText} 呼出 · Ctrl+V 粘贴（图片可识别）· Enter 翻译 · Esc 隐藏";
     }
 
     public void ShowInitial()
@@ -74,61 +87,25 @@ public partial class MainWindow : Window
         ref int value,
         int valueSize);
 
-    public void ShowForText(string? clipboardText, Stopwatch hotkeyWatch)
-    {
-        if (!string.IsNullOrWhiteSpace(clipboardText))
-        {
-            SourceBox.Text = clipboardText.Length > 20000
-                ? clipboardText[..20000]
-                : clipboardText;
-        }
-        else
-        {
-            SourceBox.Text = string.Empty;
-            ResultBox.Text = string.Empty;
-            ShowResultPanel();
-        }
-
-        UpdateDirection();
-        var windowMs = ShowWindowAndMeasure(hotkeyWatch);
-
-        if (string.IsNullOrWhiteSpace(SourceBox.Text))
-        {
-            StatusText.Text = "剪切板为空，可直接输入";
-            return;
-        }
-
-        SourceBox.ScrollToHome();
-        _ = TranslateAsync(windowMs);
-    }
-
-    public void ShowForImage(BitmapSource image, Stopwatch hotkeyWatch)
+    /// <summary>热键呼出：显示窗口并清空上次内容，等待粘贴或输入。</summary>
+    public void ShowCleared()
     {
         SourceBox.Text = string.Empty;
         ResultBox.Text = string.Empty;
         ShowResultPanel();
         UpdateDirection();
-        StatusText.Text = "正在识别图片…";
-        var windowMs = ShowWindowAndMeasure(hotkeyWatch);
-        _ = RecognizeImageAsync(image, windowMs);
-    }
-
-    private long ShowWindowAndMeasure(Stopwatch hotkeyWatch)
-    {
-        ShowRestored();
-        Activate();
-        NativeMethods.ForceForeground(new WindowInteropHelper(this).Handle);
+        ShowWindow();
         SourceBox.Focus();
-        UpdateLayout();
-
-        hotkeyWatch.Stop();
-        var windowMs = hotkeyWatch.ElapsedMilliseconds;
-        Log($"hotkey->window {windowMs}ms");
-        return windowMs;
+        StatusText.Text = "可粘贴或输入文本";
     }
 
-    private async Task RecognizeImageAsync(BitmapSource image, long windowMs)
+    private async Task PasteImageAsync(BitmapSource image)
     {
+        SourceBox.Text = string.Empty;
+        ResultBox.Text = string.Empty;
+        ShowResultPanel();
+        StatusText.Text = "正在识别图片…";
+
         var ocrWatch = Stopwatch.StartNew();
         try
         {
@@ -146,13 +123,11 @@ public partial class MainWindow : Window
 
             if (string.IsNullOrWhiteSpace(SourceBox.Text))
             {
-                ResultBox.Text = string.Empty;
-                ShowResultPanel();
                 StatusText.Text = "图片中未识别到文字";
                 return;
             }
 
-            await TranslateAsync(windowMs + ocrWatch.ElapsedMilliseconds);
+            await TranslateAsync();
         }
         catch (Exception error)
         {
@@ -200,7 +175,7 @@ public partial class MainWindow : Window
         Top = area.Top + Math.Max(12, (area.Height - ActualHeight) / 3);
     }
 
-    private async Task TranslateAsync(long windowMs = -1)
+    private async Task TranslateAsync()
     {
         var text = SourceBox.Text.Trim();
         if (text.Length == 0)
@@ -252,10 +227,9 @@ public partial class MainWindow : Window
             ResultBox.ScrollToHome();
             stopwatch.Stop();
 
-            var totalMs = windowMs >= 0 ? windowMs + stopwatch.ElapsedMilliseconds : stopwatch.ElapsedMilliseconds;
             var direction = language == DetectedLanguage.Chinese ? "中 → 英" : "英 → 中";
             StatusText.Text = $"{direction} · {elapsedMs:F0}ms · 离线";
-            Log($"translate {elapsedMs:F0}ms hotkey->result {totalMs}ms");
+            Log($"translate {elapsedMs:F0}ms");
         }
         catch (Exception error)
         {
@@ -492,6 +466,14 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             _ = TranslateAsync();
+        }
+        else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control
+            && ClipboardHelper.TryGetContent() is { Text: null, Image: not null } content)
+        {
+            // TextBox 粘贴不了图片；剪切板无文本而有图片时拦截 Ctrl+V 走 OCR，
+            // 有文本则放行，保持 TextBox 默认粘贴行为。
+            e.Handled = true;
+            _ = PasteImageAsync(content.Image);
         }
     }
 

@@ -221,8 +221,9 @@
                                           Padding="8,4,8,8" />
             </Grid>
 
-            <TextBlock Grid.Row="6"
-                       Text="Ctrl+Alt+F9 呼出 · Enter 翻译 · Shift+Enter 换行 · Esc 隐藏"
+            <TextBlock x:Name="HintText"
+                       Grid.Row="6"
+                       Text="Ctrl+Alt+F9 呼出 · Ctrl+V 粘贴（图片可识别）· Enter 翻译 · Esc 隐藏"
                        Foreground="#6F6F6F"
                        FontSize="11"
                        Margin="0,10,0,0" />
