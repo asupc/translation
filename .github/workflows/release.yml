@@ -139,7 +139,7 @@ jobs:
 
             1. 解压 zip 到任意目录
             2. 运行 `Translation.App.exe`，应用常驻托盘
-            3. 选中文字 → `Ctrl+C` → `Ctrl+Alt+F9`
+            3. `Ctrl+Alt+F9` 呼出窗口，`Ctrl+V` 粘贴（图片自动 OCR），`Enter` 翻译
 
             ## 系统要求
 
