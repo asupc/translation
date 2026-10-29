@@ -82,6 +82,10 @@ void translation_engine_destroy(TranslationEngine* engine);
   4. 注册热键、托盘
   5. 后台加载翻译模型（OCR 懒加载，首次图片翻译才初始化）
 - 单实例：命名 Mutex + 命名 EventWaitHandle；第二个实例设置事件后退出，第一个实例显示窗口。
+- 空闲释放（`IdleReleaseMinutes`，默认 3 分钟，0 关闭）：
+  - 窗口隐藏（Esc/关闭）后开始计时，呼出即取消并预热翻译模型。
+  - 到点后销毁翻译模型、OCR 模型与词典连接（native 卸载放后台线程，不卡 UI）；下次翻译/OCR/查词自动重新加载。
+  - 竞态防护：检查点全在 UI 线程；翻译/OCR 进行中用计数（`BeginOperation`/`EndOperation`）推迟释放，销毁前先等未完成的模型初始化任务收尾。
 
 ## 性能关键点
 
@@ -89,7 +93,7 @@ void translation_engine_destroy(TranslationEngine* engine);
 - 运行时设置 `OMP_NUM_THREADS`（默认 8）；16 逻辑线程全开会明显变慢。
 - `compute_type=int8`；模型 int8 量化后约 75.9MB/方向。
 - 翻译模型启动时加载；OCR 模型懒加载（首次图片翻译时初始化）。
-- 窗口常驻托盘，热键路径不承担进程冷启动。
+- 窗口常驻托盘，热键路径不承担进程冷启动；窗口隐藏超过 `IdleReleaseMinutes` 后释放模型与词典（实测约降 180MB），呼出即预热重载。
 - 翻译窗口使用不透明窗口 + `WindowChrome`，支持边缘缩放；Windows 11 用 DWM 圆角。
 
 ## 路径与配置
@@ -100,7 +104,7 @@ void translation_engine_destroy(TranslationEngine* engine);
   3. 从应用目录向上查找包含 `models/translation` 的目录（开发时用）
 - 词典：`models/dictionary/ecdict.sqlite`（缺失时查词自动回退句子翻译）
 - 设置：`%APPDATA%\TranslationApp\settings.json`
-  - `Hotkey`、`AutoStart`、`WindowWidth`、`WindowHeight`、`WindowLeft`、`WindowTop`
+  - `Hotkey`、`AutoStart`、`WindowWidth`、`WindowHeight`、`WindowLeft`、`WindowTop`、`IdleReleaseMinutes`
 - 日志：`%LOCALAPPDATA%\TranslationApp\logs\app.log`；只记录时机/类型/长度，不记录剪切板正文。
 - 开机启动：`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，值为 `"<exe>" --tray`。
 
