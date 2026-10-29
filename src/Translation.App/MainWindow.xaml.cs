@@ -47,6 +47,7 @@ public partial class MainWindow : Window
 
     public void ShowWindow()
     {
+        _app.OnMainWindowShown();
         ShowRestored();
         Activate();
         NativeMethods.ForceForeground(new WindowInteropHelper(this).Handle);
@@ -101,41 +102,49 @@ public partial class MainWindow : Window
 
     private async Task PasteImageAsync(BitmapSource image)
     {
-        SourceBox.Text = string.Empty;
-        ResultBox.Text = string.Empty;
-        ShowResultPanel();
-        StatusText.Text = "正在识别图片…";
-
-        var ocrWatch = Stopwatch.StartNew();
+        _app.BeginOperation();
         try
         {
-            var ocr = await _app.EnsureOcrAsync();
-            var text = await Task.Run(() => ocr.Recognize(image));
-            ocrWatch.Stop();
-
-            SourceBox.Text = text.Trim();
-            SourceBox.CaretIndex = SourceBox.Text.Length;
-            SourceBox.ScrollToHome();
-            UpdateDirection();
-            Log(
-                $"ocr {image.PixelWidth}x{image.PixelHeight} " +
-                $"chars={SourceBox.Text.Length} {ocrWatch.ElapsedMilliseconds}ms");
-
-            if (string.IsNullOrWhiteSpace(SourceBox.Text))
-            {
-                StatusText.Text = "图片中未识别到文字";
-                return;
-            }
-
-            await TranslateAsync();
-        }
-        catch (Exception error)
-        {
-            ocrWatch.Stop();
+            SourceBox.Text = string.Empty;
             ResultBox.Text = string.Empty;
             ShowResultPanel();
-            StatusText.Text = $"OCR 失败: {error.Message}";
-            Log($"ocr failed: {error.Message}");
+            StatusText.Text = "正在识别图片…";
+
+            var ocrWatch = Stopwatch.StartNew();
+            try
+            {
+                var ocr = await _app.EnsureOcrAsync();
+                var text = await Task.Run(() => ocr.Recognize(image));
+                ocrWatch.Stop();
+
+                SourceBox.Text = text.Trim();
+                SourceBox.CaretIndex = SourceBox.Text.Length;
+                SourceBox.ScrollToHome();
+                UpdateDirection();
+                Log(
+                    $"ocr {image.PixelWidth}x{image.PixelHeight} " +
+                    $"chars={SourceBox.Text.Length} {ocrWatch.ElapsedMilliseconds}ms");
+
+                if (string.IsNullOrWhiteSpace(SourceBox.Text))
+                {
+                    StatusText.Text = "图片中未识别到文字";
+                    return;
+                }
+
+                await TranslateAsync();
+            }
+            catch (Exception error)
+            {
+                ocrWatch.Stop();
+                ResultBox.Text = string.Empty;
+                ShowResultPanel();
+                StatusText.Text = $"OCR 失败: {error.Message}";
+                Log($"ocr failed: {error.Message}");
+            }
+        }
+        finally
+        {
+            _app.EndOperation();
         }
     }
 
@@ -177,67 +186,76 @@ public partial class MainWindow : Window
 
     private async Task TranslateAsync()
     {
-        var text = SourceBox.Text.Trim();
-        if (text.Length == 0)
-        {
-            return;
-        }
-
-        var language = LanguageDetector.Detect(text);
-        if (language == DetectedLanguage.Unsupported)
-        {
-            ResultBox.Text = string.Empty;
-            ShowResultPanel();
-            StatusText.Text = "暂不支持该语言";
-            return;
-        }
-
-        if (language == DetectedLanguage.Empty)
-        {
-            ResultBox.Text = string.Empty;
-            ShowResultPanel();
-            StatusText.Text = "没有可翻译的文本";
-            return;
-        }
-
-        UpdateDirection();
-        StatusText.Text = "翻译中…";
-        var stopwatch = Stopwatch.StartNew();
-
-        // 单个英文单词优先走离线词典（不依赖翻译模型加载）；未命中回退句子翻译。
-        if (language == DetectedLanguage.English && WordPattern.IsSingleWord(text))
-        {
-            var entry = await LookupDictionaryAsync(text);
-            if (entry is not null)
-            {
-                ShowDictionaryEntry(entry);
-                stopwatch.Stop();
-                StatusText.Text = $"词典 · {stopwatch.Elapsed.TotalMilliseconds:F0}ms · 离线";
-                Log($"dictionary '{entry.Word}' {stopwatch.Elapsed.TotalMilliseconds:F0}ms");
-                return;
-            }
-        }
-
+        // 进行中计数防止空闲释放在翻译/词典查询期间销毁模型与连接。
+        _app.BeginOperation();
         try
         {
-            await _app.EnsureCoreReadyAsync();
-            var (translated, elapsedMs) = await _app.Core!.TranslateAsync(text, language);
-            ShowResultPanel();
-            ResultBox.Text = translated;
-            ResultBox.ScrollToHome();
-            stopwatch.Stop();
+            var text = SourceBox.Text.Trim();
+            if (text.Length == 0)
+            {
+                return;
+            }
 
-            var direction = language == DetectedLanguage.Chinese ? "中 → 英" : "英 → 中";
-            StatusText.Text = $"{direction} · {elapsedMs:F0}ms · 离线";
-            Log($"translate {elapsedMs:F0}ms");
+            var language = LanguageDetector.Detect(text);
+            if (language == DetectedLanguage.Unsupported)
+            {
+                ResultBox.Text = string.Empty;
+                ShowResultPanel();
+                StatusText.Text = "暂不支持该语言";
+                return;
+            }
+
+            if (language == DetectedLanguage.Empty)
+            {
+                ResultBox.Text = string.Empty;
+                ShowResultPanel();
+                StatusText.Text = "没有可翻译的文本";
+                return;
+            }
+
+            UpdateDirection();
+            StatusText.Text = "翻译中…";
+            var stopwatch = Stopwatch.StartNew();
+
+            // 单个英文单词优先走离线词典（不依赖翻译模型加载）；未命中回退句子翻译。
+            if (language == DetectedLanguage.English && WordPattern.IsSingleWord(text))
+            {
+                var entry = await LookupDictionaryAsync(text);
+                if (entry is not null)
+                {
+                    ShowDictionaryEntry(entry);
+                    stopwatch.Stop();
+                    StatusText.Text = $"词典 · {stopwatch.Elapsed.TotalMilliseconds:F0}ms · 离线";
+                    Log($"dictionary '{entry.Word}' {stopwatch.Elapsed.TotalMilliseconds:F0}ms");
+                    return;
+                }
+            }
+
+            try
+            {
+                await _app.EnsureCoreReadyAsync();
+                var (translated, elapsedMs) = await _app.Core!.TranslateAsync(text, language);
+                ShowResultPanel();
+                ResultBox.Text = translated;
+                ResultBox.ScrollToHome();
+                stopwatch.Stop();
+
+                var direction = language == DetectedLanguage.Chinese ? "中 → 英" : "英 → 中";
+                StatusText.Text = $"{direction} · {elapsedMs:F0}ms · 离线";
+                Log($"translate {elapsedMs:F0}ms");
+            }
+            catch (Exception error)
+            {
+                stopwatch.Stop();
+                ResultBox.Text = string.Empty;
+                ShowResultPanel();
+                StatusText.Text = $"翻译失败: {error.Message}";
+                Log($"translate failed: {error.Message}");
+            }
         }
-        catch (Exception error)
+        finally
         {
-            stopwatch.Stop();
-            ResultBox.Text = string.Empty;
-            ShowResultPanel();
-            StatusText.Text = $"翻译失败: {error.Message}";
-            Log($"translate failed: {error.Message}");
+            _app.EndOperation();
         }
     }
 
@@ -444,6 +462,7 @@ public partial class MainWindow : Window
     {
         _app.SaveWindowState();
         Hide();
+        _app.OnMainWindowHidden();
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

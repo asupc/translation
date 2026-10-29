@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         _initialHotkey = hotkey;
         HotkeyBox.Text = hotkey.ToString();
         AutoStartBox.IsChecked = draft.AutoStart;
+        IdleReleaseBox.Text = draft.IdleReleaseMinutes.ToString();
     }
 
     public AppSettings Draft { get; }
@@ -113,8 +114,17 @@ public partial class SettingsWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (!int.TryParse(IdleReleaseBox.Text.Trim(), out var idleMinutes)
+            || idleMinutes < 0
+            || idleMinutes > 1440)
+        {
+            System.Windows.MessageBox.Show("空闲释放分钟数需为 0–1440 的整数（0 为不释放）", "翻译设置");
+            return;
+        }
+
         Draft.Hotkey = _hotkey.ToString();
         Draft.AutoStart = AutoStartBox.IsChecked == true;
+        Draft.IdleReleaseMinutes = idleMinutes;
         DialogResult = true;
     }
 

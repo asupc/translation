@@ -45,6 +45,24 @@
                       FontSize="13"
                       Margin="0,0,0,16" />
 
+            <TextBlock Text="空闲释放（分钟）"
+                       Foreground="#8C8C8C"
+                       FontSize="12"
+                       Margin="0,0,0,6" />
+            <TextBox x:Name="IdleReleaseBox"
+                     Background="#2A2A2A"
+                     Foreground="#F2F2F2"
+                     CaretBrush="#F2F2F2"
+                     BorderThickness="0"
+                     Padding="8"
+                     FontSize="14"
+                     InputMethod.IsInputMethodEnabled="False" />
+            <TextBlock Text="窗口隐藏指定分钟后释放翻译 / OCR 模型与词典，下次使用时自动重新加载（首次翻译稍慢）；0 为不释放"
+                       Foreground="#6F6F6F"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="0,4,0,14" />
+
             <TextBlock Text="默认使用离线翻译，不联网。百度在线引擎将在后续版本作为可选功能加入。"
                        Foreground="#6F6F6F"
                        FontSize="11"

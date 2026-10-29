@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using WinForms = System.Windows.Forms;
 
 namespace Translation.App;
@@ -22,6 +23,9 @@ public partial class App : System.Windows.Application
     private Mutex? _instanceMutex;
     private EventWaitHandle? _showEvent;
     private CancellationTokenSource? _showListenerCts;
+    private readonly DispatcherTimer _idleTimer = new();
+    private int _activeOperations;
+    private bool _releasing;
 
     public TranslationCore? Core { get; private set; }
     public bool CoreReady { get; private set; }
@@ -67,9 +71,8 @@ public partial class App : System.Windows.Application
             _settings.AutoStart = false;
         }
 
-        Core = new TranslationCore(
-            Paths.TranslationModel("opus-mt-zh-en-int8"),
-            Paths.TranslationModel("opus-mt-en-zh-int8"));
+        _idleTimer.Tick += OnIdleTimerTick;
+        PreloadCore();
 
         _mainWindow = new MainWindow(this, _settings);
         var startHidden = Array.Exists(
@@ -78,6 +81,10 @@ public partial class App : System.Windows.Application
         if (!startHidden)
         {
             _mainWindow.ShowInitial();
+        }
+        else
+        {
+            ArmIdleRelease();
         }
 
         SetupTray();
@@ -96,7 +103,6 @@ public partial class App : System.Windows.Application
         }
 
         StartShowListener();
-        _coreInitTask = InitializeCoreAsync();
     }
 
     private static void SignalExistingInstance()
@@ -142,6 +148,20 @@ public partial class App : System.Windows.Application
         }, token);
     }
 
+    /// <summary>启动时与空闲释放后（懒）加载翻译模型。</summary>
+    private void PreloadCore()
+    {
+        if (_coreInitTask is not null)
+        {
+            return;
+        }
+
+        Core = new TranslationCore(
+            Paths.TranslationModel("opus-mt-zh-en-int8"),
+            Paths.TranslationModel("opus-mt-en-zh-int8"));
+        _coreInitTask = InitializeCoreAsync();
+    }
+
     private async Task InitializeCoreAsync()
     {
         try
@@ -161,12 +181,9 @@ public partial class App : System.Windows.Application
 
     public async Task EnsureCoreReadyAsync()
     {
-        if (_coreInitTask is null)
-        {
-            throw new InvalidOperationException("翻译核心尚未初始化");
-        }
-
-        await _coreInitTask;
+        // 空闲释放后 Core 已销毁，首次翻译在这里重新加载。
+        PreloadCore();
+        await _coreInitTask!;
         if (!CoreReady)
         {
             throw new InvalidOperationException(CoreError ?? "翻译模型尚未加载完成");
@@ -178,6 +195,105 @@ public partial class App : System.Windows.Application
         _ocrInitTask ??= Task.Run(() => new OcrService(Paths.OcrModels));
         _ocr = await _ocrInitTask;
         return _ocr;
+    }
+
+    /// <summary>窗口隐藏：按设置武装空闲释放计时；0 为不释放。</summary>
+    public void OnMainWindowHidden()
+    {
+        ArmIdleRelease();
+    }
+
+    /// <summary>窗口显示：取消空闲释放，并预热翻译模型掩盖释放后的加载延迟。</summary>
+    public void OnMainWindowShown()
+    {
+        _idleTimer.Stop();
+        PreloadCore();
+    }
+
+    /// <summary>翻译/OCR 进行中计数；空闲释放据此推迟，避免销毁使用中的模型。</summary>
+    public void BeginOperation() => _activeOperations++;
+
+    public void EndOperation() => _activeOperations--;
+
+    private void ArmIdleRelease()
+    {
+        _idleTimer.Stop();
+        if (_settings.IdleReleaseMinutes > 0)
+        {
+            _idleTimer.Interval = TimeSpan.FromMinutes(_settings.IdleReleaseMinutes);
+            _idleTimer.Start();
+        }
+    }
+
+    private async void OnIdleTimerTick(object? sender, EventArgs e)
+    {
+        if (_releasing)
+        {
+            return;
+        }
+
+        _idleTimer.Stop();
+        if (_activeOperations > 0)
+        {
+            // 有翻译/OCR 还在跑，稍后重试。
+            _idleTimer.Interval = TimeSpan.FromSeconds(30);
+            _idleTimer.Start();
+            return;
+        }
+
+        _releasing = true;
+        try
+        {
+            // 先等可能仍在初始化的模型任务收尾，避免销毁加载中的引擎；
+            // InitializeCoreAsync 内部已兜底异常，这里的 catch 只为防御。
+            if (_coreInitTask is not null)
+            {
+                try { await _coreInitTask; } catch { }
+            }
+
+            if (_ocrInitTask is not null)
+            {
+                try { await _ocrInitTask; } catch { }
+            }
+
+            // await 期间窗口可能被呼出使用，恢复后在 UI 线程再查一次。
+            if (_mainWindow is { IsVisible: true } || _activeOperations > 0)
+            {
+                return;
+            }
+
+            var core = Core;
+            Core = null;
+            _coreInitTask = null;
+            CoreReady = false;
+            CoreError = null;
+
+            var ocr = _ocr;
+            _ocr = null;
+            _ocrInitTask = null;
+
+            Dictionary.Dispose();
+            if (core is not null || ocr is not null)
+            {
+                await Task.Run(() =>
+                {
+                    ocr?.Dispose();
+                    core?.Dispose();
+                });
+            }
+
+            AppLog.Write(
+                $"idle release after {_settings.IdleReleaseMinutes}min: translation/ocr models and dictionary freed");
+        }
+        finally
+        {
+            _releasing = false;
+            // 期间若 OCR/翻译被用过会重新加载，隐藏状态下重新武装等下一轮空闲。
+            if (_mainWindow is not { IsVisible: true })
+            {
+                ArmIdleRelease();
+            }
+        }
     }
 
     private void OnTranslateHotkey()
@@ -248,6 +364,7 @@ public partial class App : System.Windows.Application
             AutoStart = autoStart,
             WindowWidth = _settings.WindowWidth,
             WindowHeight = _settings.WindowHeight,
+            IdleReleaseMinutes = _settings.IdleReleaseMinutes,
         };
 
         var window = new SettingsWindow(draft);
@@ -312,10 +429,19 @@ public partial class App : System.Windows.Application
 
             _settings.Hotkey = hotkey.ToString();
             _settings.AutoStart = draft.AutoStart;
+            _settings.IdleReleaseMinutes = draft.IdleReleaseMinutes;
             SaveSettings();
+            if (_mainWindow is not { IsVisible: true })
+            {
+                // 窗口隐藏时新时长立即生效：重新武装（或关闭）空闲释放。
+                ArmIdleRelease();
+            }
+
             _mainWindow?.SetStatus("设置已保存");
             _mainWindow?.SetHotkeyHint(hotkey.ToString());
-            AppLog.Write($"settings saved hotkey={_settings.Hotkey} autostart={_settings.AutoStart}");
+            AppLog.Write(
+                $"settings saved hotkey={_settings.Hotkey} autostart={_settings.AutoStart} " +
+                $"idleRelease={_settings.IdleReleaseMinutes}min");
         }
         catch (Exception exception)
         {
@@ -375,6 +501,7 @@ public partial class App : System.Windows.Application
     protected override void OnExit(ExitEventArgs e)
     {
         SaveSettings();
+        _idleTimer.Stop();
         _showListenerCts?.Cancel();
         _showListenerCts?.Dispose();
         _showEvent?.Dispose();
