@@ -300,7 +300,7 @@ public partial class App : System.Windows.Application
     private void OnTranslateHotkey()
     {
         AppLog.Write("translate hotkey fired");
-        _mainWindow?.ShowCleared();
+        _mainWindow?.ShowForHotkey();
     }
 
     private static System.Drawing.Icon LoadTrayIcon()

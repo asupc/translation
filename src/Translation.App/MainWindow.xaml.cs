@@ -92,16 +92,38 @@ public partial class MainWindow : Window
         ref int value,
         int valueSize);
 
-    /// <summary>热键呼出：显示窗口并清空上次内容，等待粘贴或输入。</summary>
-    public void ShowCleared()
+    /// <summary>
+    /// 热键呼出：显示窗口并保留上次内容。原文非空时全选，
+    /// 直接输入或 Ctrl+V 即替换旧内容；想重看结果直接按 Enter 重新翻译。
+    /// 需要清空时用窗口内的「清空」按钮。
+    /// </summary>
+    public void ShowForHotkey()
+    {
+        ShowWindow();
+        SourceBox.Focus();
+
+        if (SourceBox.Text.Length > 0)
+        {
+            SourceBox.SelectAll();
+            StatusText.Text = "已保留上次内容 · 直接输入替换";
+            return;
+        }
+
+        ShowResultPanel();
+        UpdateDirection();
+        StatusText.Text = "可粘贴或输入文本";
+    }
+
+    /// <summary>显式清空原文与结果（呼出热键不再自动清空）。</summary>
+    public void ClearContent()
     {
         SourceBox.Text = string.Empty;
         ResultBox.Text = string.Empty;
+        _dictionaryText = string.Empty;
         ShowResultPanel();
         UpdateDirection();
-        ShowWindow();
+        StatusText.Text = "已清空";
         SourceBox.Focus();
-        StatusText.Text = "可粘贴或输入文本";
     }
 
     private async Task PasteImageAsync(BitmapSource image)
@@ -434,6 +456,11 @@ public partial class MainWindow : Window
     private void Translate_Click(object sender, RoutedEventArgs e)
     {
         _ = TranslateAsync();
+    }
+
+    private void Clear_Click(object sender, RoutedEventArgs e)
+    {
+        ClearContent();
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)

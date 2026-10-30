@@ -184,6 +184,10 @@
                             Margin="0,0,8,0" />
                     <Button Content="复制译文"
                             Click="Copy_Click"
+                            Style="{StaticResource FlatButton}"
+                            Margin="0,0,8,0" />
+                    <Button Content="清空"
+                            Click="Clear_Click"
                             Style="{StaticResource FlatButton}" />
                 </StackPanel>
                 <TextBlock x:Name="StatusText"
