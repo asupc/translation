@@ -12,6 +12,7 @@ public partial class App : System.Windows.Application
     private const string ShowEventName = @"Local\TranslationApp.Show";
 
     private WinForms.NotifyIcon? _tray;
+    private TrayMenuWindow? _trayMenu;
     private HotkeyManager? _hotkeys;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
@@ -330,13 +331,42 @@ public partial class App : System.Windows.Application
             Visible = true,
         };
 
-        var menu = new WinForms.ContextMenuStrip();
-        menu.Items.Add("显示", null, (_, _) => ShowMainWindow());
-        menu.Items.Add("设置", null, (_, _) => OpenSettings());
-        menu.Items.Add(new WinForms.ToolStripSeparator());
-        menu.Items.Add("退出", null, (_, _) => Shutdown());
-        _tray.ContextMenuStrip = menu;
+        // 菜单改用 WPF 自绘（TrayMenuWindow），与主窗口深色风格一致；
+        // 这里只处理鼠标事件并在光标处弹出。
+        _tray.MouseUp += Tray_MouseUp;
         _tray.DoubleClick += (_, _) => ShowMainWindow();
+    }
+
+    private void Tray_MouseUp(object? sender, WinForms.MouseEventArgs e)
+    {
+        if (e.Button != WinForms.MouseButtons.Right)
+        {
+            return;
+        }
+
+        if (_trayMenu is not null)
+        {
+            // 已在弹出中再点右键：收起菜单（与系统托盘菜单一致）。
+            _trayMenu.Dismiss();
+            return;
+        }
+
+        var menu = new TrayMenuWindow(ShowMainWindow, OpenSettings, ShutdownTray);
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_trayMenu, menu))
+            {
+                _trayMenu = null;
+            }
+        };
+        _trayMenu = menu;
+        menu.ShowNearCursor();
+    }
+
+    /// <summary>托盘“退出”：走正常关机流程，确保设置与状态落盘。</summary>
+    private void ShutdownTray()
+    {
+        Dispatcher.BeginInvoke(new Action(Shutdown));
     }
 
     private void OpenSettings()
@@ -506,6 +536,7 @@ public partial class App : System.Windows.Application
         _showListenerCts?.Dispose();
         _showEvent?.Dispose();
         _hotkeys?.Dispose();
+        _trayMenu?.Close();
         _tray?.Dispose();
         _ocr?.Dispose();
         Dictionary.Dispose();

@@ -48,9 +48,13 @@ public partial class MainWindow : Window
     public void ShowWindow()
     {
         _app.OnMainWindowShown();
+        // 呼出时先抬到最前，激活后立即取消置顶：窗口不再长期悬浮在其它程序之上
+        // （切换窗口时会被正常遮住），但呼出瞬间仍能越过前台窗口拿到焦点。
+        Topmost = true;
         ShowRestored();
         Activate();
         NativeMethods.ForceForeground(new WindowInteropHelper(this).Handle);
+        Topmost = false;
     }
 
     public (double Left, double Top, double Width, double Height) GetPersistedBounds()

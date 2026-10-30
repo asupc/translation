@@ -10,7 +10,6 @@
         WindowStyle="None"
         Background="#1F1F1F"
         ShowInTaskbar="False"
-        Topmost="True"
         ResizeMode="CanResize"
         WindowStartupLocation="Manual"
         FontFamily="Microsoft YaHei UI"
