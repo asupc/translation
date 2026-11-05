@@ -1,4 +1,4 @@
-#include "translation_core.h"
+﻿#include "translation_core.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +36,33 @@ std::string join_path(const std::string& directory, const char* file) {
 
 std::string take_error_message(const char* prefix, const std::exception& error) {
   return std::string(prefix) + ": " + error.what();
+}
+
+// 按换行符（\r\n 或 \n）拆分为多行，保留空行占位；newline 返回重组译文
+// 应使用的换行符，原文含 \r\n 则沿用 \r\n，否则用 \n。
+std::vector<std::string> split_lines(const std::string& text, std::string& newline) {
+  newline = text.find("\r\n") != std::string::npos ? "\r\n" : "\n";
+
+  std::vector<std::string> lines;
+  std::string line;
+  for (size_t i = 0; i < text.size(); ++i) {
+    const char c = text[i];
+    if (c == '\n' || c == '\r') {
+      lines.push_back(line);
+      line.clear();
+      if (c == '\r' && i + 1 < text.size() && text[i + 1] == '\n') {
+        ++i;
+      }
+    } else {
+      line += c;
+    }
+  }
+  lines.push_back(line);
+  return lines;
+}
+
+bool is_blank(const std::string& line) {
+  return line.find_first_not_of(" \t") == std::string::npos;
 }
 
 }  // namespace
@@ -106,33 +133,60 @@ char* translation_engine_translate(
   try {
     std::lock_guard<std::mutex> lock(engine->mutex);
 
-    std::vector<std::string> source_tokens;
-    if (!engine->source->Encode(text, &source_tokens).ok()) {
-      throw std::runtime_error("source tokenization failed");
+    // 句子级模型不保留换行（SentencePiece 会把换行当空白吃掉）：
+    // 按行拆分批量翻译，再按原换行结构拼回；max_decoding_length 也随之
+    // 作用于单行而非整段，避免多行文本被截断。
+    std::string newline;
+    const std::vector<std::string> lines = split_lines(text, newline);
+
+    std::vector<std::vector<std::string>> batch;
+    std::vector<size_t> batch_line;  // batch 中各项对应 lines 的下标
+    for (size_t i = 0; i < lines.size(); ++i) {
+      if (is_blank(lines[i])) {
+        continue;
+      }
+
+      std::vector<std::string> source_tokens;
+      if (!engine->source->Encode(lines[i], &source_tokens).ok()) {
+        throw std::runtime_error("source tokenization failed");
+      }
+      source_tokens.push_back("</s>");
+      batch.push_back(std::move(source_tokens));
+      batch_line.push_back(i);
     }
-    source_tokens.push_back("</s>");
 
-    ctranslate2::TranslationOptions options;
-    options.beam_size = static_cast<size_t>(beam_size > 0 ? beam_size : 2);
-    options.max_decoding_length =
-        static_cast<size_t>(max_decoding_length > 0 ? max_decoding_length : 256);
+    std::vector<std::string> translated(lines.size());
+    if (!batch.empty()) {
+      ctranslate2::TranslationOptions options;
+      options.beam_size = static_cast<size_t>(beam_size > 0 ? beam_size : 2);
+      options.max_decoding_length =
+          static_cast<size_t>(max_decoding_length > 0 ? max_decoding_length : 256);
 
-    const auto results =
-        engine->translator->translate_batch({source_tokens}, options);
-    if (results.empty()) {
-      throw std::runtime_error("translation returned no result");
-    }
+      const auto results = engine->translator->translate_batch(batch, options);
+      if (results.size() != batch.size()) {
+        throw std::runtime_error("translation returned unexpected result count");
+      }
 
-    std::vector<std::string> target_tokens;
-    for (const auto& token : results[0].output()) {
-      if (token != "</s>" && token != "<pad>") {
-        target_tokens.push_back(token);
+      for (size_t i = 0; i < results.size(); ++i) {
+        std::vector<std::string> target_tokens;
+        for (const auto& token : results[i].output()) {
+          if (token != "</s>" && token != "<pad>") {
+            target_tokens.push_back(token);
+          }
+        }
+
+        if (!engine->target->Decode(target_tokens, &translated[batch_line[i]]).ok()) {
+          throw std::runtime_error("target detokenization failed");
+        }
       }
     }
 
     std::string output;
-    if (!engine->target->Decode(target_tokens, &output).ok()) {
-      throw std::runtime_error("target detokenization failed");
+    for (size_t i = 0; i < lines.size(); ++i) {
+      if (i > 0) {
+        output += newline;
+      }
+      output += translated[i];
     }
 
     char* result = static_cast<char*>(std::malloc(output.size() + 1));
