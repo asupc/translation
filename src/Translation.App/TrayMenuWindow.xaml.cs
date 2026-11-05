@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
-using System.Windows.Media;
 using WinForms = System.Windows.Forms;
 
 namespace Translation.App;
@@ -30,17 +29,8 @@ public partial class TrayMenuWindow : Window
     {
         base.OnSourceInitialized(e);
         // 与主窗口一致：交给 DWM 做圆角（Win11），不自绘圆角以避免透明窗口的渲染开销。
-        var handle = new WindowInteropHelper(this).Handle;
-        var preference = 2; // DWMWCP_ROUND
-        _ = DwmSetWindowAttribute(handle, 33, ref preference, sizeof(int));
+        NativeMethods.TryEnableRoundedCorners(new WindowInteropHelper(this).Handle);
     }
-
-    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(
-        IntPtr hwnd,
-        int attribute,
-        ref int value,
-        int valueSize);
 
     /// <summary>在鼠标位置弹出：贴着托盘图标向左上展开，超出屏幕时自动翻转并夹在工作区内。</summary>
     public void ShowNearCursor()
@@ -60,33 +50,35 @@ public partial class TrayMenuWindow : Window
 
     private void PositionNearCursor()
     {
-        var dpi = VisualTreeHelper.GetDpi(this);
         var cursor = WinForms.Cursor.Position; // 物理像素
         var workArea = WinForms.Screen.FromPoint(cursor).WorkingArea; // 物理像素
+        var (dpiX, dpiY) = NativeMethods.GetDpiForPoint(cursor.X, cursor.Y);
+        var scaleX = dpiX / 96.0;
+        var scaleY = dpiY / 96.0;
 
-        var scaleX = dpi.DpiScaleX <= 0 ? 1 : dpi.DpiScaleX;
-        var scaleY = dpi.DpiScaleY <= 0 ? 1 : dpi.DpiScaleY;
-
-        var cursorX = cursor.X / scaleX;
-        var cursorY = cursor.Y / scaleY;
-        var left = workArea.Left / scaleX;
-        var top = workArea.Top / scaleY;
-        var right = workArea.Right / scaleX;
-        var bottom = workArea.Bottom / scaleY;
-
-        var width = ActualWidth;
-        var height = ActualHeight;
+        // 用物理像素直接 SetWindowPos，避免在混合 DPI 多显示器下按错误 DPI 换算 DIP。
+        var width = (int)Math.Ceiling(ActualWidth * scaleX);
+        var height = (int)Math.Ceiling(ActualHeight * scaleY);
 
         // 托盘在底部：菜单向上展开；放不下则改到光标下方（顶部任务栏的情况）。
-        var x = cursorX - width;
-        var y = cursorY - height;
-        if (y < top)
+        var x = cursor.X - width;
+        var y = cursor.Y - height;
+        if (y < workArea.Top)
         {
-            y = cursorY;
+            y = cursor.Y;
         }
 
-        Left = Math.Max(left, Math.Min(x, right - width));
-        Top = Math.Max(top, Math.Min(y, bottom - height));
+        x = Math.Max(workArea.Left, Math.Min(x, workArea.Right - width));
+        y = Math.Max(workArea.Top, Math.Min(y, workArea.Bottom - height));
+
+        NativeMethods.SetWindowPos(
+            new WindowInteropHelper(this).Handle,
+            IntPtr.Zero,
+            x,
+            y,
+            0,
+            0,
+            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
 
     private void CloseThen(Action action)

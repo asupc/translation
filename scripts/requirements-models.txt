@@ -1,0 +1,6 @@
+# 翻译模型转换依赖（CI 与本地复用）
+# 固定版本以保证转换结果可复现；升级时同步更新 .github/workflows/release.yml 的缓存 key。
+ctranslate2==4.6.0
+transformers==4.49.0
+sentencepiece==0.2.0
+torch==2.6.0

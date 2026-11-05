@@ -17,6 +17,7 @@ import csv
 import os
 import sqlite3
 import sys
+import time
 
 # exchange 中参与变形索引的七类词形
 FORM_KINDS = ("p", "d", "i", "3", "s", "r", "t")
@@ -42,6 +43,10 @@ CREATE TABLE inflections (
     lemma TEXT NOT NULL,
     kinds TEXT NOT NULL
 )
+"""
+
+CREATE_NOCASE_INDEX = """
+CREATE INDEX IF NOT EXISTS idx_entries_word_nocase ON entries(word COLLATE NOCASE)
 """
 
 
@@ -83,25 +88,15 @@ def parse_lemma(exchange):
 
 
 def load_rows(csv_path):
-    """读 CSV，返回（入库行, 原词词形表, 0:原词链接表）。"""
+    """读 CSV，返回（按词频排序的入库行, 原词词形表, 0:原词链接表）。"""
     rows = []
-    forms_by_word = {}
-    zero_links = []
-    with open(csv_path, "r", encoding="utf-8", newline="") as handle:
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         for record in reader:
             word = (record.get("word") or "").strip()
             translation = (record.get("translation") or "").strip()
             if not word or not translation:
                 continue
-
-            exchange = (record.get("exchange") or "").strip()
-            forms = parse_forms(exchange)
-            if forms:
-                forms_by_word[word] = forms
-            lemma = parse_lemma(exchange)
-            if lemma:
-                zero_links.append((word, lemma))
 
             rows.append((
                 word,
@@ -113,14 +108,27 @@ def load_rows(csv_path):
                 clean(record.get("tag")),
                 parse_int(record.get("bnc"), -1),
                 parse_int(record.get("frq"), -1),
-                exchange or None,
+                (record.get("exchange") or "").strip() or None,
             ))
 
     if not rows:
         sys.exit("CSV 中没有可用词条（translation 全为空?）")
 
-    # 常用词（frq 排名小）在前；变形索引冲突时保留更常用的原词。
+    # 常用词（frq 排名小）在前。后续 forms_by_word 按此顺序构建，
+    # 变形索引冲突时自然保留更常用原词；INSERT OR IGNORE 也保留靠前行。
     rows.sort(key=lambda row: row[8] if row[8] >= 0 else 1 << 30)
+
+    forms_by_word = {}
+    zero_links = []
+    for row in rows:
+        word, exchange = row[0], row[9]
+        forms = parse_forms(exchange)
+        if forms:
+            forms_by_word.setdefault(word, forms)
+        lemma = parse_lemma(exchange)
+        if lemma:
+            zero_links.append((word, lemma))
+
     return rows, forms_by_word, zero_links
 
 
@@ -152,6 +160,19 @@ def build_inflections(forms_by_word, zero_links):
     return index
 
 
+def remove_with_retry(path, attempts=5):
+    """Windows 上 Explorer/杀毒软件可能短暂占用文件。"""
+    for attempt in range(attempts):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="构建 ECDICT SQLite 词典库")
     parser.add_argument("--csv", required=True, help="ECDICT CSV 路径")
@@ -166,25 +187,35 @@ def main():
 
     out_directory = os.path.dirname(os.path.abspath(args.out))
     os.makedirs(out_directory, exist_ok=True)
-    if os.path.exists(args.out):
-        os.remove(args.out)
+    temporary = args.out + ".tmp"
+    remove_with_retry(temporary)
 
-    connection = sqlite3.connect(args.out)
     try:
-        connection.execute("PRAGMA journal_mode = OFF")
-        connection.execute(CREATE_ENTRIES)
-        connection.execute(CREATE_INFLECTIONS)
-        with connection:
-            connection.executemany(
-                "INSERT OR IGNORE INTO entries (word, phonetic, translation, pos, "
-                "collins, oxford, tag, bnc, frq, exchange) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                rows)
-            connection.executemany(
-                "INSERT OR IGNORE INTO inflections (form, lemma, kinds) VALUES (?, ?, ?)",
-                [(form, lemma, kinds) for form, (lemma, kinds) in inflections.items()])
-    finally:
-        connection.close()
+        connection = sqlite3.connect(temporary)
+        try:
+            connection.execute("PRAGMA journal_mode = OFF")
+            connection.execute(CREATE_ENTRIES)
+            connection.execute(CREATE_INFLECTIONS)
+            with connection:
+                connection.executemany(
+                    "INSERT OR IGNORE INTO entries (word, phonetic, translation, pos, "
+                    "collins, oxford, tag, bnc, frq, exchange) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    rows)
+                connection.executemany(
+                    "INSERT OR IGNORE INTO inflections (form, lemma, kinds) VALUES (?, ?, ?)",
+                    [(form, lemma, kinds) for form, (lemma, kinds) in inflections.items()])
+            connection.execute(CREATE_NOCASE_INDEX)
+            connection.execute("ANALYZE")
+            connection.commit()
+        finally:
+            connection.close()
+
+        # 先写临时文件再原子替换，构建失败不会破坏已有词典库。
+        os.replace(temporary, args.out)
+    except Exception:
+        remove_with_retry(temporary)
+        raise
 
     size_mb = os.path.getsize(args.out) / (1024 * 1024)
     print(f"词条 {len(rows)} 条，变形索引 {len(inflections)} 条")

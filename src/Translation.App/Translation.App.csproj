@@ -14,6 +14,7 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- 托盘图标通过 pack URI 读取，需要作为 WPF Resource 嵌入。 -->
     <Resource Include="Resources\app.ico" />
   </ItemGroup>
   <ItemGroup>
@@ -24,24 +25,24 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="$(MSBuildProjectDirectory)\..\..\native\build\translation_core.dll"
+             Condition="Exists('$(MSBuildProjectDirectory)\..\..\native\build\translation_core.dll')"
              Link="translation_core.dll"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(MSBuildProjectDirectory)\..\..\native\build\ctranslate2.dll"
+             Condition="Exists('$(MSBuildProjectDirectory)\..\..\native\build\ctranslate2.dll')"
              Link="ctranslate2.dll"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="$(MSBuildProjectDirectory)\..\..\native\build\dnnl.dll"
+             Condition="Exists('$(MSBuildProjectDirectory)\..\..\native\build\dnnl.dll')"
              Link="dnnl.dll"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <Target Name="CopyNativeDlls" AfterTargets="Build">
-    <ItemGroup>
-      <NativeFiles Include="$(MSBuildProjectDirectory)\..\..\native\build\translation_core.dll" />
-      <NativeFiles Include="$(MSBuildProjectDirectory)\..\..\native\build\ctranslate2.dll" />
-      <NativeFiles Include="$(MSBuildProjectDirectory)\..\..\native\build\dnnl.dll" />
-    </ItemGroup>
-    <Copy SourceFiles="@(NativeFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  <!-- 原生 DLL 缺失时给出明确警告（运行时才会 DllNotFoundException，构建不应静默通过）。 -->
+  <Target Name="WarnMissingNativeDlls" BeforeTargets="Build"
+          Condition="!Exists('$(MSBuildProjectDirectory)\..\..\native\build\translation_core.dll') Or !Exists('$(MSBuildProjectDirectory)\..\..\native\build\ctranslate2.dll') Or !Exists('$(MSBuildProjectDirectory)\..\..\native\build\dnnl.dll')">
+    <Warning Text="native/build 下的 translation_core.dll / ctranslate2.dll / dnnl.dll 不完整；应用可编译但运行时会加载失败。先运行 scripts\build-native.ps1。" />
   </Target>
 </Project>

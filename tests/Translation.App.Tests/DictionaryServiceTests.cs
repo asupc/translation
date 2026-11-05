@@ -17,7 +17,23 @@ public sealed class DictionaryServiceTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_directory, recursive: true);
+        // SQLite 句柄释放/杀毒软件扫描可能短暂占用文件，重试几次避免偶发测试失败。
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_directory, recursive: true);
+                return;
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                Thread.Sleep(100);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 4)
+            {
+                Thread.Sleep(100);
+            }
+        }
     }
 
     [Fact]
@@ -95,6 +111,17 @@ public sealed class DictionaryServiceTests : IDisposable
         Assert.Null(await service.LookupAsync("class"));
     }
 
+    [Fact]
+    public async Task LookupAsync_空闲释放后再次查询可重开连接()
+    {
+        var database = CreateDatabase();
+        using var service = new DictionaryService(database);
+
+        Assert.NotNull(await service.LookupAsync("class"));
+        service.Dispose();
+        Assert.NotNull(await service.LookupAsync("class"));
+    }
+
     /// <summary>建与生产结构一致的最小词典库：class 词条 + china/China 大小写对 + 变形索引。</summary>
     private string CreateDatabase()
     {
@@ -108,12 +135,13 @@ public sealed class DictionaryServiceTests : IDisposable
               + "pos TEXT, collins INTEGER NOT NULL DEFAULT 0, oxford INTEGER NOT NULL DEFAULT 0, tag TEXT, "
               + "bnc INTEGER NOT NULL DEFAULT -1, frq INTEGER NOT NULL DEFAULT -1, exchange TEXT)",
             "CREATE TABLE inflections (form TEXT PRIMARY KEY, lemma TEXT NOT NULL, kinds TEXT NOT NULL)",
+            // ECDICT 实际存储的是字面 "\n"，这里保持与生产一致。
             "INSERT INTO entries (word, phonetic, translation, collins, oxford, tag, frq, exchange) VALUES "
-              + "('class', 'klɑːs', 'n. 班级\nn. 阶级\nvt. 把…分类', 3, 1, 'cet4 cet6', 500, "
+              + @"('class', 'klɑːs', 'n. 班级\nn. 阶级\nvt. 把…分类', 3, 1, 'cet4 cet6', 500, "
               + "'s:classes/3:classes/p:classified/d:classified/i:classifying')",
             "INSERT INTO entries (word, translation, frq) VALUES ('china', 'n. 瓷器', 4000)",
             "INSERT INTO entries (word, translation, frq) VALUES ('China', 'n. 中国', 300)",
-            "INSERT INTO inflections (form, lemma, kinds) VALUES ('classes', 'class', 's,3')",
+            "INSERT INTO inflections (form, lemma, kinds) VALUES ('classes', 'class', '3,s')",
             "INSERT INTO inflections (form, lemma, kinds) VALUES ('went', 'go', 'p')",
         })
         {

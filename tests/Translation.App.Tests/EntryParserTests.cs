@@ -31,6 +31,26 @@ public class EntryParserTests
     }
 
     [Fact]
+    public void ParseTranslation_连续领域标签全部提取()
+    {
+        var senses = EntryParser.ParseTranslation("[医][口语] 感冒");
+
+        var sense = Assert.Single(senses);
+        Assert.Equal("[医] [口语]", sense.Domain);
+        Assert.Equal("感冒", sense.Text);
+    }
+
+    [Fact]
+    public void ParseTranslation_跳过只有前缀没有释义的行()
+    {
+        var senses = EntryParser.ParseTranslation("n. \\n[医]\\nvt. 分类");
+
+        var sense = Assert.Single(senses);
+        Assert.Equal("vt.", sense.Pos);
+        Assert.Equal("分类", sense.Text);
+    }
+
+    [Fact]
     public void ParseTranslation_空与无前缀行不抛异常()
     {
         Assert.Empty(EntryParser.ParseTranslation(null));
@@ -61,6 +81,15 @@ public class EntryParserTests
         var form = Assert.Single(forms);
         Assert.Equal("ran", form.Word);
         Assert.Empty(EntryParser.ParseExchange(null));
+    }
+
+    [Fact]
+    public void ParseExchange_重复类型只保留第一个()
+    {
+        var forms = EntryParser.ParseExchange("p:ran/p:went");
+
+        var form = Assert.Single(forms);
+        Assert.Equal("ran", form.Word);
     }
 
     [Theory]

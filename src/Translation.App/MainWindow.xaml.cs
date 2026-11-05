@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -80,17 +79,8 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var handle = new WindowInteropHelper(this).Handle;
-        var preference = 2; // DWMWCP_ROUND (Windows 11)
-        _ = DwmSetWindowAttribute(handle, 33, ref preference, sizeof(int));
+        NativeMethods.TryEnableRoundedCorners(new WindowInteropHelper(this).Handle);
     }
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(
-        IntPtr hwnd,
-        int attribute,
-        ref int value,
-        int valueSize);
 
     /// <summary>
     /// 热键呼出：显示窗口并保留上次内容。原文非空时全选，
@@ -131,9 +121,6 @@ public partial class MainWindow : Window
         _app.BeginOperation();
         try
         {
-            SourceBox.Text = string.Empty;
-            ResultBox.Text = string.Empty;
-            ShowResultPanel();
             StatusText.Text = "正在识别图片…";
 
             var ocrWatch = Stopwatch.StartNew();
@@ -143,6 +130,7 @@ public partial class MainWindow : Window
                 var text = await Task.Run(() => ocr.Recognize(image));
                 ocrWatch.Stop();
 
+                // 识别成功后才替换原文，OCR 失败时保留用户已有内容。
                 SourceBox.Text = text.Trim();
                 SourceBox.CaretIndex = SourceBox.Text.Length;
                 SourceBox.ScrollToHome();
@@ -162,8 +150,6 @@ public partial class MainWindow : Window
             catch (Exception error)
             {
                 ocrWatch.Stop();
-                ResultBox.Text = string.Empty;
-                ShowResultPanel();
                 StatusText.Text = $"OCR 失败: {error.Message}";
                 Log($"ocr failed: {error.Message}");
             }
@@ -411,7 +397,7 @@ public partial class MainWindow : Window
         var parts = new List<string>();
         if (entry.Collins > 0)
         {
-            parts.Add(new string('★', Math.Min(entry.Collins, 5)).PadRight(5, '☆'));
+            parts.Add(new string('★', Math.Clamp(entry.Collins, 0, 5)).PadRight(5, '☆'));
         }
 
         if (entry.Oxford)
@@ -475,8 +461,14 @@ public partial class MainWindow : Window
 
         try
         {
-            System.Windows.Clipboard.SetText(text);
-            StatusText.Text = dictionaryVisible ? "词典结果已复制" : "译文已复制";
+            if (ClipboardHelper.TrySetText(text))
+            {
+                StatusText.Text = dictionaryVisible ? "词典结果已复制" : "译文已复制";
+            }
+            else
+            {
+                StatusText.Text = "复制失败：剪贴板被其他程序占用";
+            }
         }
         catch (Exception error)
         {
@@ -522,8 +514,9 @@ public partial class MainWindow : Window
         {
             // Ctrl+Enter / Shift+Enter 插入换行，Enter 留给触发翻译。
             e.Handled = true;
+            var caret = SourceBox.SelectionStart + Environment.NewLine.Length;
             SourceBox.SelectedText = Environment.NewLine;
-            SourceBox.CaretIndex = SourceBox.SelectionStart + Environment.NewLine.Length;
+            SourceBox.CaretIndex = caret;
         }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control
             && ClipboardHelper.TryGetContent() is { Text: null, Image: not null } content)

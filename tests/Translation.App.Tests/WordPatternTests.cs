@@ -13,6 +13,8 @@ public class WordPatternTests
     [InlineData("U.S.")]
     [InlineData("class.")]        // 热键场景：剪切板单词带尾部句读
     [InlineData("class,")]
+    [InlineData("class。")]       // 中文句号
+    [InlineData("class-")]
     [InlineData("\"class\"")]     // 首尾引号
     public void IsSingleWord_接受单个英文单词(string text)
     {
@@ -32,9 +34,18 @@ public class WordPatternTests
     }
 
     [Fact]
+    public void IsSingleWord_长度边界为64()
+    {
+        Assert.True(WordPattern.IsSingleWord(new string('a', 64)));
+        Assert.False(WordPattern.IsSingleWord(new string('a', 65)));
+    }
+
+    [Fact]
     public void Normalize_剥掉首尾引号与尾部句读()
     {
         Assert.Equal("class", WordPattern.Normalize("\"class.\""));
         Assert.Equal("don't", WordPattern.Normalize("don't"));
+        Assert.Equal("class", WordPattern.Normalize("class。"));
+        Assert.Equal("class", WordPattern.Normalize("class-"));
     }
 }

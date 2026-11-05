@@ -2,8 +2,16 @@
 bin/
 obj/
 .vs/
+.vscode/
 *.user
 *.suo
+
+# Test artifacts
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage*/
 
 # Native build outputs and vendored sources
 native/build/
@@ -27,3 +35,6 @@ __pycache__/
 
 # Logs and local files
 *.log
+Translation-win-x64-*.zip
+Thumbs.db
+.DS_Store

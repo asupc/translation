@@ -14,9 +14,11 @@ public sealed class OcrService : IDisposable
         RecMaxDegreeOfParallelism = 1,
     };
     private readonly object _gate = new();
+    private bool _disposed;
 
     public OcrService(string modelDirectory)
     {
+        // 以 Latin 预设为模板，随后覆盖为四项中文模型路径；其余预设字段不参与识别。
         var modelSet = RapidOcrModelSet.PPOCRv5Latin with
         {
             DetModelPath = Path.Combine(modelDirectory, "ch_PP-OCRv5_det_mobile.onnx"),
@@ -31,20 +33,35 @@ public sealed class OcrService : IDisposable
     {
         lock (_gate)
         {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(OcrService));
+            }
+
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
             using var stream = new MemoryStream();
             encoder.Save(stream);
             stream.Position = 0;
 
-            using var skBitmap = SKBitmap.Decode(stream);
+            using var skBitmap = SKBitmap.Decode(stream)
+                ?? throw new InvalidOperationException("无法解码图片");
             var result = _ocr.Detect(skBitmap, _options);
-            return result.StrRes;
+            return result.StrRes ?? string.Empty;
         }
     }
 
     public void Dispose()
     {
-        _ocr.Dispose();
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _ocr.Dispose();
+        }
     }
 }

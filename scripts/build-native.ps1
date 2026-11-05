@@ -22,6 +22,29 @@ if (-not $vsPath) {
     throw 'Visual Studio with C++ tools not found.'
 }
 
+# 按安装的 VS 主版本选择 CMake 生成器：BuildTools 18 自带 v180 工具集，
+# 用 "Visual Studio 17 2022" 生成器会因缺少 v143 工具集而报 MSB8020。
+[int]$vsMajor = ((& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion | Select-Object -First 1) -split '\.')[0]
+$vsGenerator = if ($vsMajor -ge 18) { 'Visual Studio 18 2026' } else { 'Visual Studio 17 2022' }
+Write-Host "Using CMake generator: $vsGenerator"
+
+function Initialize-BuildDir {
+    param(
+        [string]$Dir,
+        [string]$Generator
+    )
+
+    # 生成器切换（17 <-> 18）后旧 CMakeCache 会直接报错，提前按生成器隔离。
+    $cache = Join-Path $Dir 'CMakeCache.txt'
+    if (Test-Path $cache) {
+        $match = Select-String -Path $cache -Pattern '^CMAKE_GENERATOR:INTERNAL=(.*)$' | Select-Object -First 1
+        if ($match -and $match.Matches[0].Groups[1].Value -ne $Generator) {
+            Write-Host "Generator changed, clearing $Dir"
+            Remove-Item $Dir -Recurse -Force
+        }
+    }
+}
+
 $cmake = Join-Path $vsPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
 if (-not (Test-Path $cmake)) {
     $command = Get-Command cmake.exe -ErrorAction SilentlyContinue
@@ -52,7 +75,19 @@ function Ensure-Repo {
     )
 
     if (Test-Path (Join-Path $Path 'CMakeLists.txt')) {
-        return
+        # 缓存/旧目录可能停留在错误版本：校验 tag，不匹配则重新克隆。
+        $current = & git -C $Path describe --tags --exact-match 2>$null
+        if ($LASTEXITCODE -eq 0 -and $current -eq $Branch) {
+            return
+        }
+
+        Write-Host "Replacing stale $Path (expected $Branch, found '$current')"
+        Remove-Item $Path -Recurse -Force
+    }
+    elseif (Test-Path $Path) {
+        # 上次克隆中断的半成品目录：git clone 会因目录非空直接失败，先清理。
+        Write-Host "Removing incomplete $Path"
+        Remove-Item $Path -Recurse -Force
     }
 
     $arguments = @('clone', '--depth', '1', '--branch', $Branch)
@@ -77,13 +112,16 @@ Ensure-Repo -Path (Join-Path $thirdParty 'oneDNN') `
 
 $dnnlInstall = Join-Path $build 'dnnl-install-omp'
 $dnnlLibrary = Join-Path $dnnlInstall 'lib\dnnl.lib'
-if ($Force -or -not (Test-Path $dnnlLibrary)) {
+$dnnlRuntime = Join-Path $dnnlInstall 'bin\dnnl.dll'
+$dnnlHeaders = Join-Path $dnnlInstall 'include'
+if ($Force -or -not (Test-Path $dnnlLibrary) -or -not (Test-Path $dnnlRuntime) -or -not (Test-Path $dnnlHeaders)) {
     Write-Host 'Building oneDNN (OMP)...'
     $dnnlBuild = Join-Path $build 'oneDNN'
+    Initialize-BuildDir -Dir $dnnlBuild -Generator $vsGenerator
     Invoke-Checked $cmake @(
         '-S', (Join-Path $thirdParty 'oneDNN'),
         '-B', $dnnlBuild,
-        '-G', 'Visual Studio 17 2022',
+        '-G', $vsGenerator,
         '-A', 'x64',
         '-DCMAKE_BUILD_TYPE=Release',
         # CI 上较新的 MSVC 对 <optional> 等头文件严格检查语言标准，显式固定 C++17
@@ -101,18 +139,24 @@ if ($Force -or -not (Test-Path $dnnlLibrary)) {
 
 $dnnlLayout = Join-Path $build 'dnnl-root\oneapi\dnnl\latest\cpu_gomp'
 New-Item -ItemType Directory -Force (Join-Path $dnnlLayout 'include'), (Join-Path $dnnlLayout 'lib') | Out-Null
+# 保留 include/oneapi/dnnl 目录层级；CT2 的 FindDNNL 按该布局查找 dnnl.hpp。
 Copy-Item (Join-Path $dnnlInstall 'include\*') (Join-Path $dnnlLayout 'include') -Recurse -Force
-Copy-Item (Join-Path $dnnlInstall 'include\oneapi\dnnl\*') (Join-Path $dnnlLayout 'include') -Force
 Copy-Item (Join-Path $dnnlInstall 'lib\dnnl.lib') (Join-Path $dnnlLayout 'lib') -Force
 
 $ct2Build = Join-Path $build 'ct2'
 $ct2Library = Join-Path $build 'ctranslate2.lib'
-if ($Force -or -not (Test-Path $ct2Library)) {
+$ct2Runtime = Join-Path $build 'ctranslate2.dll'
+$dnnlRuntimeCopy = Join-Path $build 'dnnl.dll'
+if ($Force -or
+    -not (Test-Path $ct2Library) -or
+    -not (Test-Path $ct2Runtime) -or
+    -not (Test-Path $dnnlRuntimeCopy)) {
     Write-Host 'Building CTranslate2 (DNNL, OpenMP)...'
+    Initialize-BuildDir -Dir $ct2Build -Generator $vsGenerator
     Invoke-Checked $cmake @(
         '-S', (Join-Path $thirdParty 'CTranslate2'),
         '-B', $ct2Build,
-        '-G', 'Visual Studio 17 2022',
+        '-G', $vsGenerator,
         '-A', 'x64',
         '-DCMAKE_BUILD_TYPE=Release',
         '-DCMAKE_CXX_STANDARD=17',
@@ -139,10 +183,11 @@ if ($Force -or -not (Test-Path $ct2Library)) {
 
 Write-Host 'Building translation_core...'
 $coreBuild = Join-Path $build 'core'
+Initialize-BuildDir -Dir $coreBuild -Generator $vsGenerator
 Invoke-Checked $cmake @(
     '-S', (Join-Path $native 'translation_core'),
     '-B', $coreBuild,
-    '-G', 'Visual Studio 17 2022',
+    '-G', $vsGenerator,
     '-A', 'x64',
     '-DCMAKE_BUILD_TYPE=Release'
 )

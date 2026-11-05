@@ -34,9 +34,13 @@ public sealed record HotkeyDefinition(int Modifiers, int VirtualKey)
             native |= NativeMethods.MOD_WIN;
         }
 
-        return new HotkeyDefinition(
-            native,
-            System.Windows.Input.KeyInterop.VirtualKeyFromKey(key));
+        var virtualKey = System.Windows.Input.KeyInterop.VirtualKeyFromKey(key);
+        if (virtualKey == 0 || IsModifierKey((Keys)virtualKey))
+        {
+            throw new ArgumentException($"不支持的按键: {key}", nameof(key));
+        }
+
+        return new HotkeyDefinition(native, virtualKey);
     }
 
     public static bool TryParse(
@@ -135,7 +139,9 @@ public sealed record HotkeyDefinition(int Modifiers, int VirtualKey)
 
     private static bool IsModifierKey(Keys key)
     {
-        return key is Keys.ControlKey or Keys.LControlKey or Keys.RControlKey
+        return key is Keys.None
+            or Keys.Modifiers or Keys.Control or Keys.Shift or Keys.Alt
+            or Keys.ControlKey or Keys.LControlKey or Keys.RControlKey
             or Keys.Menu or Keys.LMenu or Keys.RMenu
             or Keys.ShiftKey or Keys.LShiftKey or Keys.RShiftKey
             or Keys.LWin or Keys.RWin;

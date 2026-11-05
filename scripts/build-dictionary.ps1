@@ -45,10 +45,18 @@ if (-not (Test-Path $CsvPath)) {
     throw "CSV 不存在: $CsvPath"
 }
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw '未找到 python，请先安装 Python 3.10+ 并加入 PATH'
+$python = Get-Command python -ErrorAction SilentlyContinue
+$pythonArguments = @()
+if (-not $python) {
+    # Windows Store 安装常见只有 py launcher，没有 python.exe。
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if (-not $pyLauncher) {
+        throw '未找到 python，请先安装 Python 3.10+ 并加入 PATH'
+    }
+    $python = $pyLauncher
+    $pythonArguments = @('-3')
 }
 
 # -X utf8：非中文 Windows（如 CI）的 stdout 为 cp1252，打印中文汇总会崩溃
-& python -X utf8 (Join-Path $PSScriptRoot 'build-dictionary.py') --csv $CsvPath --out $databasePath
+& $python.Source @pythonArguments -X utf8 (Join-Path $PSScriptRoot 'build-dictionary.py') --csv $CsvPath --out $databasePath
 exit $LASTEXITCODE

@@ -10,19 +10,21 @@ extern "C" {
 #  else
 #    define TRANSLATION_CORE_API __declspec(dllimport)
 #  endif
+#  define TRANSLATION_CORE_CALL __cdecl
 #else
 #  define TRANSLATION_CORE_API
+#  define TRANSLATION_CORE_CALL
 #endif
 
 typedef struct TranslationEngine TranslationEngine;
 
-TRANSLATION_CORE_API TranslationEngine* translation_engine_create(
+TRANSLATION_CORE_API TranslationEngine* TRANSLATION_CORE_CALL translation_engine_create(
     const char* model_dir,
     int num_threads,
     char* error_message,
     int error_message_size);
 
-TRANSLATION_CORE_API char* translation_engine_translate(
+TRANSLATION_CORE_API char* TRANSLATION_CORE_CALL translation_engine_translate(
     TranslationEngine* engine,
     const char* text,
     int beam_size,
@@ -30,11 +32,12 @@ TRANSLATION_CORE_API char* translation_engine_translate(
     char* error_message,
     int error_message_size);
 
-TRANSLATION_CORE_API void translation_engine_free_string(char* text);
+TRANSLATION_CORE_API void TRANSLATION_CORE_CALL translation_engine_free_string(char* text);
 
-TRANSLATION_CORE_API void translation_engine_destroy(TranslationEngine* engine);
+TRANSLATION_CORE_API void TRANSLATION_CORE_CALL translation_engine_destroy(
+    TranslationEngine* engine);
 
-TRANSLATION_CORE_API const char* translation_engine_version(void);
+TRANSLATION_CORE_API const char* TRANSLATION_CORE_CALL translation_engine_version(void);
 
 #ifdef __cplusplus
 }

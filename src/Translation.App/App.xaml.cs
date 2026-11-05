@@ -27,6 +27,7 @@ public partial class App : System.Windows.Application
     private readonly DispatcherTimer _idleTimer = new();
     private int _activeOperations;
     private bool _releasing;
+    private bool _shuttingDown;
 
     public TranslationCore? Core { get; private set; }
     public bool CoreReady { get; private set; }
@@ -108,7 +109,8 @@ public partial class App : System.Windows.Application
 
     private static void SignalExistingInstance()
     {
-        for (var attempt = 0; attempt < 10; attempt++)
+        // 首实例可能还没创建事件对象，最多等待约 5 秒。
+        for (var attempt = 0; attempt < 50; attempt++)
         {
             try
             {
@@ -152,30 +154,57 @@ public partial class App : System.Windows.Application
     /// <summary>启动时与空闲释放后（懒）加载翻译模型。</summary>
     private void PreloadCore()
     {
-        if (_coreInitTask is not null)
+        if (_coreInitTask is not null || _shuttingDown)
         {
             return;
         }
 
-        Core = new TranslationCore(
+        var core = new TranslationCore(
             Paths.TranslationModel("opus-mt-zh-en-int8"),
             Paths.TranslationModel("opus-mt-en-zh-int8"));
-        _coreInitTask = InitializeCoreAsync();
+        Core = core;
+        CoreError = null;
+        _coreInitTask = InitializeCoreAsync(core);
     }
 
-    private async Task InitializeCoreAsync()
+    private async Task InitializeCoreAsync(TranslationCore core)
     {
         try
         {
-            await Core!.InitializeAsync();
+            await core.InitializeAsync();
+            if (_shuttingDown)
+            {
+                return;
+            }
+
             CoreReady = true;
             _mainWindow?.SetStatus("就绪");
             AppLog.Write("translation core ready");
         }
         catch (Exception error)
         {
+            // 失败后清空任务引用，下次呼出/翻译可重试（否则会永久复用已失败的任务）。
+            CoreReady = false;
             CoreError = error.Message;
-            _mainWindow?.SetStatus($"模型加载失败: {error.Message}");
+            if (ReferenceEquals(Core, core))
+            {
+                Core = null;
+                _coreInitTask = null;
+                try
+                {
+                    core.Dispose();
+                }
+                catch (Exception disposeError)
+                {
+                    AppLog.Write($"dispose failed core failed: {disposeError.Message}");
+                }
+            }
+
+            if (!_shuttingDown)
+            {
+                _mainWindow?.SetStatus($"模型加载失败: {error.Message}");
+            }
+
             AppLog.Write($"translation core failed: {error.Message}");
         }
     }
@@ -184,7 +213,9 @@ public partial class App : System.Windows.Application
     {
         // 空闲释放后 Core 已销毁，首次翻译在这里重新加载。
         PreloadCore();
-        await _coreInitTask!;
+        var task = _coreInitTask
+            ?? throw new InvalidOperationException(CoreError ?? "翻译模型尚未加载完成");
+        await task;
         if (!CoreReady)
         {
             throw new InvalidOperationException(CoreError ?? "翻译模型尚未加载完成");
@@ -193,9 +224,27 @@ public partial class App : System.Windows.Application
 
     public async Task<OcrService> EnsureOcrAsync()
     {
-        _ocrInitTask ??= Task.Run(() => new OcrService(Paths.OcrModels));
-        _ocr = await _ocrInitTask;
-        return _ocr;
+        if (_shuttingDown)
+        {
+            throw new ObjectDisposedException(nameof(App));
+        }
+
+        var task = _ocrInitTask ??= Task.Run(() => new OcrService(Paths.OcrModels));
+        try
+        {
+            _ocr = await task;
+            return _ocr;
+        }
+        catch
+        {
+            // 失败任务不能永久缓存：下次粘贴图片时重试初始化。
+            if (ReferenceEquals(_ocrInitTask, task))
+            {
+                _ocrInitTask = null;
+            }
+
+            throw;
+        }
     }
 
     /// <summary>窗口隐藏：按设置武装空闲释放计时；0 为不释放。</summary>
@@ -212,29 +261,40 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>翻译/OCR 进行中计数；空闲释放据此推迟，避免销毁使用中的模型。</summary>
-    public void BeginOperation() => _activeOperations++;
+    public void BeginOperation() => Interlocked.Increment(ref _activeOperations);
 
-    public void EndOperation() => _activeOperations--;
+    public void EndOperation()
+    {
+        if (Interlocked.Decrement(ref _activeOperations) < 0)
+        {
+            // 防御计数失衡：宁可让释放晚一点，也不要卡在负数。
+            Interlocked.Exchange(ref _activeOperations, 0);
+        }
+    }
 
     private void ArmIdleRelease()
     {
         _idleTimer.Stop();
-        if (_settings.IdleReleaseMinutes > 0)
+        var minutes = Math.Clamp(
+            _settings.IdleReleaseMinutes,
+            0,
+            AppSettings.MaxIdleReleaseMinutes);
+        if (minutes > 0)
         {
-            _idleTimer.Interval = TimeSpan.FromMinutes(_settings.IdleReleaseMinutes);
+            _idleTimer.Interval = TimeSpan.FromMinutes(minutes);
             _idleTimer.Start();
         }
     }
 
     private async void OnIdleTimerTick(object? sender, EventArgs e)
     {
-        if (_releasing)
+        if (_releasing || _shuttingDown)
         {
             return;
         }
 
         _idleTimer.Stop();
-        if (_activeOperations > 0)
+        if (Volatile.Read(ref _activeOperations) > 0)
         {
             // 有翻译/OCR 还在跑，稍后重试。
             _idleTimer.Interval = TimeSpan.FromSeconds(30);
@@ -258,7 +318,7 @@ public partial class App : System.Windows.Application
             }
 
             // await 期间窗口可能被呼出使用，恢复后在 UI 线程再查一次。
-            if (_mainWindow is { IsVisible: true } || _activeOperations > 0)
+            if (_mainWindow is { IsVisible: true } || Volatile.Read(ref _activeOperations) > 0)
             {
                 return;
             }
@@ -286,11 +346,16 @@ public partial class App : System.Windows.Application
             AppLog.Write(
                 $"idle release after {_settings.IdleReleaseMinutes}min: translation/ocr models and dictionary freed");
         }
+        catch (Exception error)
+        {
+            // async void：异常逃逸会终止进程，这里必须兜底。
+            AppLog.Write($"idle release failed: {error.Message}");
+        }
         finally
         {
             _releasing = false;
             // 期间若 OCR/翻译被用过会重新加载，隐藏状态下重新武装等下一轮空闲。
-            if (_mainWindow is not { IsVisible: true })
+            if (!_shuttingDown && _mainWindow is not { IsVisible: true })
             {
                 ArmIdleRelease();
             }
@@ -308,10 +373,12 @@ public partial class App : System.Windows.Application
         try
         {
             var uri = new Uri("pack://application:,,,/Resources/app.ico", UriKind.Absolute);
-            var stream = System.Windows.Application.GetResourceStream(uri)?.Stream;
+            using var stream = System.Windows.Application.GetResourceStream(uri)?.Stream;
             if (stream is not null)
             {
-                return new System.Drawing.Icon(stream);
+                using var icon = new System.Drawing.Icon(stream);
+                // Icon(Stream) 的生命周期与流绑定；克隆后即可安全释放流。
+                return (System.Drawing.Icon)icon.Clone();
             }
         }
         catch (Exception error)
@@ -459,7 +526,10 @@ public partial class App : System.Windows.Application
 
             _settings.Hotkey = hotkey.ToString();
             _settings.AutoStart = draft.AutoStart;
-            _settings.IdleReleaseMinutes = draft.IdleReleaseMinutes;
+            _settings.IdleReleaseMinutes = Math.Clamp(
+                draft.IdleReleaseMinutes,
+                0,
+                AppSettings.MaxIdleReleaseMinutes);
             SaveSettings();
             if (_mainWindow is not { IsVisible: true })
             {
@@ -475,6 +545,13 @@ public partial class App : System.Windows.Application
         }
         catch (Exception exception)
         {
+            // 保存失败：把热键回滚到旧值，避免界面状态与实际注册不一致。
+            if (_hotkeys is not null
+                && HotkeyDefinition.TryParse(previousHotkey, out var previous, out _))
+            {
+                _hotkeys.Register(previous);
+            }
+
             AppLog.Write($"apply settings failed: {exception.Message}");
             System.Windows.MessageBox.Show(
                 $"保存设置失败: {exception.Message}",
@@ -530,6 +607,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _shuttingDown = true;
         SaveSettings();
         _idleTimer.Stop();
         _showListenerCts?.Cancel();
@@ -538,9 +616,21 @@ public partial class App : System.Windows.Application
         _hotkeys?.Dispose();
         _trayMenu?.Close();
         _tray?.Dispose();
-        _ocr?.Dispose();
+
+        // 初始化任务若未完成，不能销毁可能仍在加载中的引擎/OCR（原生侧会崩溃）。
+        // 这种情况直接交给进程退出回收；已完成的正常释放。
+        // 注意不要在此阻塞等待：core 初始化延续需要 UI 线程，等待会死锁。
+        if (_coreInitTask is null || _coreInitTask.IsCompleted)
+        {
+            Core?.Dispose();
+        }
+
+        if (_ocrInitTask is null || _ocrInitTask.IsCompleted)
+        {
+            _ocr?.Dispose();
+        }
+
         Dictionary.Dispose();
-        Core?.Dispose();
 
         if (_instanceMutex is not null)
         {

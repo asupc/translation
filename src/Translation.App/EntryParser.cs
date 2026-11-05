@@ -14,7 +14,7 @@ public static partial class WordPattern
     public static string Normalize(string text)
     {
         var value = text.Trim().Trim('\'', '"', '‘', '’', '“', '”');
-        value = value.TrimEnd('.', ',', ';', ':', '!', '?');
+        value = value.TrimEnd('.', ',', ';', ':', '!', '?', '。', '，', '；', '：', '！', '？', '、', '-');
         return value.Trim('\'', '"', '‘', '’', '“', '”');
     }
 
@@ -32,8 +32,8 @@ public static partial class EntryParser
     [GeneratedRegex(@"^(?:n|v|vt|vi|adj|adv|a|prep|conj|pron|int|num|art|aux|auxv|abbr)\.\s*")]
     private static partial Regex PosPrefixRegex();
 
-    // 释义行的领域标签，如 [化] [医] [网络]。
-    [GeneratedRegex(@"^\[[^\]]{1,6}\]\s*")]
+    // 释义行的领域标签，如 [化] [医] [网络]；可连续出现多个。
+    [GeneratedRegex(@"^\[[^\]]{1,12}\]\s*")]
     private static partial Regex DomainRegex();
 
     // 词形变化的固定展示顺序：过去式、过去分词、现在分词、三单、复数、比较级、最高级。
@@ -65,15 +65,20 @@ public static partial class EntryParser
                 rest = rest[prefix.Length..];
             }
 
-            var domain = string.Empty;
-            var tag = DomainRegex().Match(rest);
-            if (tag.Success)
+            var domains = new List<string>();
+            while (DomainRegex().Match(rest) is { Success: true } tag)
             {
-                domain = tag.Value.TrimEnd();
+                domains.Add(tag.Value.TrimEnd());
                 rest = rest[tag.Length..];
             }
 
-            senses.Add(new SenseLine(pos, domain, rest));
+            if (rest.Length == 0)
+            {
+                // "n." / "[医]" 这类只有前缀没有释义的脏数据不展示。
+                continue;
+            }
+
+            senses.Add(new SenseLine(pos, string.Join(" ", domains), rest));
         }
 
         return senses;

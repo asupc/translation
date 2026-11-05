@@ -1,5 +1,6 @@
 ﻿#include "translation_core.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,10 +15,23 @@
 #include <ctranslate2/translator.h>
 #include <sentencepiece_processor.h>
 
+#ifndef TRANSLATION_CORE_VERSION
+#define TRANSLATION_CORE_VERSION "0.1.0"
+#endif
+
+namespace {
+
+// 每个 batch 最多容纳的行数：限制大段粘贴文本的峰值内存。
+constexpr size_t kMaxBatchLines = 64;
+
+}  // namespace
+
 struct TranslationEngine {
   std::unique_ptr<sentencepiece::SentencePieceProcessor> source;
   std::unique_ptr<sentencepiece::SentencePieceProcessor> target;
   std::unique_ptr<ctranslate2::Translator> translator;
+  // CTranslate2 的 Translator 可并发调用，但 SentencePieceProcessor 的
+  // Encode/Decode 并发安全未在本项目固定版本中验证；串行化单引擎调用。
   std::mutex mutex;
 };
 
@@ -69,7 +83,7 @@ bool is_blank(const std::string& line) {
 
 extern "C" {
 
-TranslationEngine* translation_engine_create(
+TranslationEngine* TRANSLATION_CORE_CALL translation_engine_create(
     const char* model_dir,
     int num_threads,
     char* error_message,
@@ -80,31 +94,37 @@ TranslationEngine* translation_engine_create(
   }
 
   const int threads = num_threads > 0 ? num_threads : 8;
-#ifdef _WIN32
-  _putenv_s("OMP_NUM_THREADS", std::to_string(threads).c_str());
-#endif
 
   try {
     auto engine = std::make_unique<TranslationEngine>();
 
+    const std::string source_path = join_path(model_dir, "source.spm");
     engine->source = std::make_unique<sentencepiece::SentencePieceProcessor>();
-    if (!engine->source->Load(join_path(model_dir, "source.spm")).ok()) {
-      throw std::runtime_error("failed to load source.spm");
+    if (const auto status = engine->source->Load(source_path); !status.ok()) {
+      throw std::runtime_error(
+          "failed to load " + source_path + ": " + std::string(status.message()));
     }
 
+    const std::string target_path = join_path(model_dir, "target.spm");
     engine->target = std::make_unique<sentencepiece::SentencePieceProcessor>();
-    if (!engine->target->Load(join_path(model_dir, "target.spm")).ok()) {
-      throw std::runtime_error("failed to load target.spm");
+    if (const auto status = engine->target->Load(target_path); !status.ok()) {
+      throw std::runtime_error(
+          "failed to load " + target_path + ": " + std::string(status.message()));
     }
 
     ctranslate2::ReplicaPoolConfig config;
     config.num_threads_per_replica = static_cast<size_t>(threads);
+
+    // 参数顺序（CTranslate2 v4.8.3 ReplicaPool 构造函数）：
+    // model_path, device, compute_type, device_indices, tensor_parallel, config。
+    // DEFAULT 会按模型权重自动选择计算类型：int8 量化模型使用 INT8，
+    // 非量化模型使用 float32，避免硬编码 INT8 导致加载失败。
     engine->translator = std::make_unique<ctranslate2::Translator>(
         model_dir,
         ctranslate2::Device::CPU,
-        ctranslate2::ComputeType::INT8,
+        ctranslate2::ComputeType::DEFAULT,
         std::vector<int>{0},
-        false,
+        /*tensor_parallel=*/false,
         config);
 
     return engine.release();
@@ -118,7 +138,7 @@ TranslationEngine* translation_engine_create(
   }
 }
 
-char* translation_engine_translate(
+char* TRANSLATION_CORE_CALL translation_engine_translate(
     TranslationEngine* engine,
     const char* text,
     int beam_size,
@@ -139,31 +159,26 @@ char* translation_engine_translate(
     std::string newline;
     const std::vector<std::string> lines = split_lines(text, newline);
 
-    std::vector<std::vector<std::string>> batch;
-    std::vector<size_t> batch_line;  // batch 中各项对应 lines 的下标
-    for (size_t i = 0; i < lines.size(); ++i) {
-      if (is_blank(lines[i])) {
-        continue;
-      }
-
-      std::vector<std::string> source_tokens;
-      if (!engine->source->Encode(lines[i], &source_tokens).ok()) {
-        throw std::runtime_error("source tokenization failed");
-      }
-      source_tokens.push_back("</s>");
-      batch.push_back(std::move(source_tokens));
-      batch_line.push_back(i);
-    }
-
     std::vector<std::string> translated(lines.size());
-    if (!batch.empty()) {
-      ctranslate2::TranslationOptions options;
-      options.beam_size = static_cast<size_t>(beam_size > 0 ? beam_size : 2);
-      options.max_decoding_length =
-          static_cast<size_t>(max_decoding_length > 0 ? max_decoding_length : 256);
 
-      const auto results = engine->translator->translate_batch(batch, options);
-      if (results.size() != batch.size()) {
+    ctranslate2::TranslationOptions options;
+    options.beam_size = static_cast<size_t>(beam_size > 0 ? beam_size : 2);
+    options.max_decoding_length =
+        static_cast<size_t>(max_decoding_length > 0 ? max_decoding_length : 256);
+
+    std::vector<std::vector<std::string>> pending;
+    std::vector<size_t> pending_lines;
+    pending.reserve(kMaxBatchLines);
+    pending_lines.reserve(kMaxBatchLines);
+
+    // 翻译并写回当前批次的结果；批次上限避免整篇文本同时展开成 token 矩阵。
+    const auto flush = [&]() {
+      if (pending.empty()) {
+        return;
+      }
+
+      const auto results = engine->translator->translate_batch(pending, options);
+      if (results.size() != pending.size()) {
         throw std::runtime_error("translation returned unexpected result count");
       }
 
@@ -175,13 +190,36 @@ char* translation_engine_translate(
           }
         }
 
-        if (!engine->target->Decode(target_tokens, &translated[batch_line[i]]).ok()) {
+        if (!engine->target->Decode(target_tokens, &translated[pending_lines[i]]).ok()) {
           throw std::runtime_error("target detokenization failed");
         }
       }
+
+      pending.clear();
+      pending_lines.clear();
+    };
+
+    for (size_t i = 0; i < lines.size(); ++i) {
+      if (is_blank(lines[i])) {
+        continue;
+      }
+
+      std::vector<std::string> source_tokens;
+      if (!engine->source->Encode(lines[i], &source_tokens).ok()) {
+        throw std::runtime_error("source tokenization failed");
+      }
+      source_tokens.push_back("</s>");
+      pending.push_back(std::move(source_tokens));
+      pending_lines.push_back(i);
+
+      if (pending.size() >= kMaxBatchLines) {
+        flush();
+      }
     }
+    flush();
 
     std::string output;
+    output.reserve(std::strlen(text));
     for (size_t i = 0; i < lines.size(); ++i) {
       if (i > 0) {
         output += newline;
@@ -205,16 +243,20 @@ char* translation_engine_translate(
   }
 }
 
-void translation_engine_free_string(char* text) {
+void TRANSLATION_CORE_CALL translation_engine_free_string(char* text) {
   std::free(text);
 }
 
-void translation_engine_destroy(TranslationEngine* engine) {
-  delete engine;
+void TRANSLATION_CORE_CALL translation_engine_destroy(TranslationEngine* engine) {
+  try {
+    delete engine;
+  } catch (...) {
+    // 析构不应抛异常；即便底层库违规，也不能让异常穿过 C ABI。
+  }
 }
 
-const char* translation_engine_version(void) {
-  return "0.1.0";
+const char* TRANSLATION_CORE_CALL translation_engine_version(void) {
+  return TRANSLATION_CORE_VERSION;
 }
 
 }  // extern "C"

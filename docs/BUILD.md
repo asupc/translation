@@ -4,7 +4,7 @@
 
 - Windows 10/11 x64
 - .NET 10 SDK
-- Visual Studio 2022 Build Tools：MSVC x64、CMake（安装器自带 CMake 3.31+）
+- Visual Studio 2022 Build Tools：MSVC x64、CMake（安装器自带 CMake 3.31+；脚本会按安装的 VS 主版本自动选择 `Visual Studio 17 2022` / `Visual Studio 18 2026` 生成器）
 - Git（首次拉取第三方源码）
 - Python 3.10+（仅模型转换/基准需要）
 
@@ -36,12 +36,14 @@
 ## 手工构建步骤
 
 以下命令假设从仓库根目录执行，`cmake` 使用 VS Build Tools 自带的版本。
+手动执行时把 `-G` 换成与本地 VS 对应的生成器（VS 2022 用 `"Visual Studio 17 2022"`，VS 18+ 用 `"Visual Studio 18 2026"`）。
 
 ### 1. oneDNN
 
 ```powershell
 cmake -S native/third_party/oneDNN -B native/build/oneDNN `
   -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_CXX_STANDARD=17 `
   -DDNNL_BUILD_TESTS=OFF -DDNNL_BUILD_EXAMPLES=OFF `
   -DDNNL_LIBRARY_TYPE=SHARED -DDNNL_CPU_RUNTIME=OMP -DDNNL_GPU_RUNTIME=NONE `
   -DCMAKE_INSTALL_PREFIX=native/build/dnnl-install-omp
@@ -63,6 +65,8 @@ native/build/dnnl-root/oneapi/dnnl/latest/cpu_gomp/
 ```powershell
 cmake -S native/third_party/CTranslate2 -B native/build/ct2 `
   -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_CXX_STANDARD=17 `
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
   -DWITH_MKL=OFF -DWITH_DNNL=ON -DWITH_RUY=OFF -DWITH_OPENBLAS=OFF `
   -DOPENMP_RUNTIME=COMP `
   -DINTEL_ROOT=<repo>/native/build/dnnl-root `
@@ -101,7 +105,7 @@ dotnet build src/Translation.App/Translation.App.csproj -c Release
 .\scripts\build-deploy.ps1 -Run   # 同步完成后启动
 ```
 
-脚本使用 `dotnet publish -r win-x64` 生成发布目录，再同步程序文件和 `models/`。`models/` 按仓库内容镜像同步（部署目录中多余的文件会被删除）；模型较大，首次部署会较慢，之后只复制有变化的文件。仓库缺少 `models/translation` 或 `models/ocr/v5` 时跳过模型同步。
+脚本使用 `dotnet publish -r win-x64` 生成发布目录，再同步程序文件和 `models/`。`models/translation`、`models/ocr`、`models/dictionary` 分别镜像同步（部署目录中对应子目录的多余文件会被删除）；缺少某个模型目录时保留目标目录现有内容并给出警告。仅需部署程序时用 `-SkipModels`；`models/translation` 与 `models/ocr/v5` 都缺失时会直接报错。
 
 ## 模型
 
@@ -116,7 +120,7 @@ models/ocr/v5/
 ### 翻译模型转换
 
 ```powershell
-python -m pip install ctranslate2 transformers sentencepiece torch
+python -m pip install -r scripts/requirements-models.txt
 ct2-transformers-converter --model Helsinki-NLP/opus-mt-zh-en `
   --output_dir models/translation/opus-mt-zh-en-int8 `
   --quantization int8 --copy_files source.spm target.spm vocab.json --force
@@ -125,6 +129,8 @@ ct2-transformers-converter --model Helsinki-NLP/opus-mt-en-zh `
   --output_dir models/translation/opus-mt-en-zh-int8 `
   --quantization int8 --copy_files source.spm target.spm vocab.json --force
 ```
+
+转换器会在输出目录生成 `model.bin`、`config.json` 等文件；`--copy_files` 额外复制 SentencePiece 分词文件。本项目的原生核心必须找到 `source.spm`、`target.spm`，其余词汇文件（`shared_vocabulary.json` / `vocabulary.json`，视模型而定）由 CTranslate2 自行读取。
 
 ### OCR 模型下载（PP-OCRv5 中文 mobile）
 
@@ -160,7 +166,7 @@ $env:TRANSLATION_MODELS_DIR = "<仓库根目录>\models"
 ## 常见问题
 
 - **热键注册失败**：被其他程序占用；在托盘“设置”中更换，默认 `Ctrl+Alt+F9`。
-- **模型加载失败**：检查 `models/translation/.../model.bin`、`source.spm`、`target.spm` 是否存在。
-- **OCR 失败**：检查 `models/ocr/v5/` 四个文件是否齐全，字典与识别模型必须匹配。
-- **DLL 找不到**：确认 `translation_core.dll`、`ctranslate2.dll`、`dnnl.dll` 都在应用输出目录；`vcomp140.dll` 由 VC++ 运行库提供。
-- **性能明显偏慢**：确认 CT2 使用 DNNL 且 `OPENMP_RUNTIME=COMP`；运行时 `OMP_NUM_THREADS` 建议 8（按 CPU 调整）。
+- **模型加载失败**：检查 `models/translation/.../model.bin`、`source.spm`、`target.spm` 是否存在；启动日志 `%LOCALAPPDATA%\TranslationApp\logs\app.log` 会记录具体路径与原生错误。
+- **OCR 失败**：检查 `models/ocr/v5/` 四个文件是否齐全，字典与识别模型必须匹配。RapidOcrNet 依赖的 ONNX Runtime / SkiaSharp 由 NuGet 自动还原，无需单独安装。
+- **DLL 找不到**：确认 `translation_core.dll`、`ctranslate2.dll`、`dnnl.dll` 都在应用输出目录；`vcomp140.dll` 由 VC++ 运行库提供。`scripts\build-app.ps1` 会在构建前检查这三个 DLL。
+- **性能明显偏慢**：确认 CT2 使用 DNNL 且 `OPENMP_RUNTIME=COMP`；线程数默认取 `Environment.ProcessorCount`（上限 16），也可在启动前设置环境变量 `OMP_NUM_THREADS` 覆盖 oneDNN 的线程池。

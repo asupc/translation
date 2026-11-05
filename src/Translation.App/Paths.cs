@@ -16,10 +16,15 @@ internal static class Paths
     private static string ResolveModelsRoot()
     {
         var overridePath = Environment.GetEnvironmentVariable("TRANSLATION_MODELS_DIR");
-        if (!string.IsNullOrWhiteSpace(overridePath)
-            && Directory.Exists(Path.Combine(overridePath, "translation")))
+        if (!string.IsNullOrWhiteSpace(overridePath))
         {
-            return Path.GetFullPath(overridePath);
+            if (Directory.Exists(Path.Combine(overridePath, "translation")))
+            {
+                return Path.GetFullPath(overridePath);
+            }
+
+            AppLog.Write(
+                $"TRANSLATION_MODELS_DIR ignored (missing translation subdirectory): {overridePath}");
         }
 
         // Single-file apps run from an extraction directory in %TEMP%, so use the

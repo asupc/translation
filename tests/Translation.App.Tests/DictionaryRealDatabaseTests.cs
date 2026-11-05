@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Translation.App.Tests;
 
-/// <summary>针对真实 ECDICT 库（models/dictionary/ecdict.sqlite）的集成验证；库不存在时自动跳过。</summary>
+/// <summary>针对真实 ECDICT 库（models/dictionary/ecdict.sqlite）的集成验证；库不存在时跳过。</summary>
 public sealed class DictionaryRealDatabaseTests
 {
     private static string? FindDatabase()
@@ -24,22 +24,19 @@ public sealed class DictionaryRealDatabaseTests
         return null;
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task 真实库_class词条包含多义项与词形变化()
     {
         var database = FindDatabase();
-        if (database is null)
-        {
-            return; // 未构建词典数据，跳过
-        }
+        Skip.If(database is null, "未构建 models/dictionary/ecdict.sqlite");
 
-        using var service = new DictionaryService(database);
+        using var service = new DictionaryService(database!);
         Assert.True(service.IsAvailable);
 
         var entry = await service.LookupAsync("class");
         Assert.NotNull(entry);
         Assert.Equal("class", entry!.Word);
-        Assert.NotEmpty(entry.Phonetic);
+        Assert.False(string.IsNullOrEmpty(entry.Phonetic));
         Assert.True(entry.Collins > 0);
         // 名词多义项（班级/阶级/上课…）与动词义项（vt.）都要存在。
         Assert.Contains(entry.Senses, sense => sense.Pos == "n." && sense.Text.Contains("班级"));
@@ -50,16 +47,13 @@ public sealed class DictionaryRealDatabaseTests
         Assert.Contains(entry.Forms, form => form.Kind == "i" && form.Word == "classing");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task 真实库_变形词还原()
     {
         var database = FindDatabase();
-        if (database is null)
-        {
-            return;
-        }
+        Skip.If(database is null, "未构建 models/dictionary/ecdict.sqlite");
 
-        using var service = new DictionaryService(database);
+        using var service = new DictionaryService(database!);
 
         var classes = await service.LookupAsync("classes");
         Assert.NotNull(classes);
@@ -72,16 +66,13 @@ public sealed class DictionaryRealDatabaseTests
         Assert.Contains("现在分词", running.InflectionNote);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task 真实库_生僻词未命中返回null()
     {
         var database = FindDatabase();
-        if (database is null)
-        {
-            return;
-        }
+        Skip.If(database is null, "未构建 models/dictionary/ecdict.sqlite");
 
-        using var service = new DictionaryService(database);
+        using var service = new DictionaryService(database!);
         Assert.Null(await service.LookupAsync("zzzzqqqq"));
     }
 }

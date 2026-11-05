@@ -10,7 +10,7 @@
 | opus-mt-en-zh-int8 | 英 → 中 | Apache-2.0 | https://huggingface.co/Helsinki-NLP/opus-mt-en-zh |
 
 - CTranslate2 int8 量化，每个方向约 75.9MB。
-- 目录必须包含：`model.bin`、`config.json`、`shared_vocabulary.json`、`source.spm`、`target.spm`、`vocab.json`。
+- 必须包含：`model.bin`、`config.json`、`source.spm`、`target.spm`；转换器还会生成 `shared_vocabulary.json`/`vocabulary.json` 等词汇文件（视模型而定），由 CTranslate2 读取。
 - 转换命令见 `docs/BUILD.md`。
 - CC-BY-4.0 模型需要保留署名；发布时在“关于”或第三方声明中加入模型来源。
 

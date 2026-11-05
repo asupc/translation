@@ -94,8 +94,8 @@ public sealed class DictionaryService : IDisposable
             reader.GetString(0),
             ReadNullableString(reader, 1),
             ReadNullableString(reader, 2),
-            reader.GetInt32(3),
-            reader.GetInt32(4),
+            ReadNullableInt32(reader, 3),
+            ReadNullableInt32(reader, 4),
             ReadNullableString(reader, 5),
             ReadNullableString(reader, 6));
     }
@@ -129,6 +129,9 @@ public sealed class DictionaryService : IDisposable
     private static string? ReadNullableString(SqliteDataReader reader, int ordinal)
         => reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 
+    private static int ReadNullableInt32(SqliteDataReader reader, int ordinal)
+        => reader.IsDBNull(ordinal) ? 0 : reader.GetInt32(ordinal);
+
     private void EnsureConnection()
     {
         if (_connection is not null)
@@ -148,7 +151,11 @@ public sealed class DictionaryService : IDisposable
 
     public void Dispose()
     {
-        _connection?.Dispose();
-        _connection = null;
+        // 与 Lookup 使用同一把锁：空闲释放可能发生在查询进行中。
+        lock (_gate)
+        {
+            _connection?.Dispose();
+            _connection = null;
+        }
     }
 }
