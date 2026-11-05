@@ -517,6 +517,14 @@ public partial class MainWindow : Window
             e.Handled = true;
             _ = TranslateAsync();
         }
+        else if (e.Key == Key.Enter &&
+                 (Keyboard.Modifiers == ModifierKeys.Control || Keyboard.Modifiers == ModifierKeys.Shift))
+        {
+            // Ctrl+Enter / Shift+Enter 插入换行，Enter 留给触发翻译。
+            e.Handled = true;
+            SourceBox.SelectedText = Environment.NewLine;
+            SourceBox.CaretIndex = SourceBox.SelectionStart + Environment.NewLine.Length;
+        }
         else if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control
             && ClipboardHelper.TryGetContent() is { Text: null, Image: not null } content)
         {
@@ -532,11 +540,6 @@ public partial class MainWindow : Window
         if (e.Key == Key.Escape)
         {
             HideWindow();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            _ = TranslateAsync();
             e.Handled = true;
         }
     }
