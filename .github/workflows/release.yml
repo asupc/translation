@@ -31,6 +31,24 @@ jobs:
         with:
           python-version: '3.12'
 
+      # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
+      - uses: actions/cache@v4
+        id: dict-cache
+        with:
+          path: |
+            models/dictionary/ecdict.csv
+            models/dictionary/ecdict.sqlite
+          key: ecdict-v1-${{ hashFiles('scripts/build-dictionary.py', 'scripts/build-dictionary.ps1') }}
+
+      - name: Build dictionary
+        if: steps.dict-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build-dictionary.ps1 -Force *>&1 | Tee-Object -FilePath dictionary-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # 放在词典构建之后，真实词典库测试才不会因缺少 ecdict.sqlite 被跳过。
       - name: Run tests
         run: dotnet test Translation.slnx -c Release --logger "console;verbosity=normal"
 
@@ -60,23 +78,6 @@ jobs:
             native/third_party
             native/build
           key: native-win-v1-${{ hashFiles('scripts/build-native.ps1', 'native/translation_core/**', 'docs/BUILD.md') }}
-
-      # 词典缓存：CSV 源文件 + SQLite 一起缓存，命中则整步跳过
-      - uses: actions/cache@v4
-        id: dict-cache
-        with:
-          path: |
-            models/dictionary/ecdict.csv
-            models/dictionary/ecdict.sqlite
-          key: ecdict-v1-${{ hashFiles('scripts/build-dictionary.py', 'scripts/build-dictionary.ps1') }}
-
-      - name: Build dictionary
-        if: steps.dict-cache.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          .\scripts\build-dictionary.ps1 -Force *>&1 | Tee-Object -FilePath dictionary-build.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # OCR 模型版本固定，按版本号缓存，避免每次运行重复下载约 21MB。
       - uses: actions/cache@v4
