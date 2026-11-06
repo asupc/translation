@@ -12,18 +12,23 @@ public sealed class SettingsStore
         WriteIndented = true,
     };
 
+    private readonly Action<string> _log;
+
     public SettingsStore()
-        : this(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            DefaultDirectoryName))
+        : this(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                DefaultDirectoryName),
+            AppLog.Write)
     {
     }
 
-    /// <summary>测试用：指定设置目录，不写入用户的 %APPDATA%。</summary>
-    public SettingsStore(string directory)
+    /// <summary>测试用：指定设置目录，不写入用户的 %APPDATA%；可替换日志输出。</summary>
+    public SettingsStore(string directory, Action<string>? log = null)
     {
         Directory.CreateDirectory(directory);
         FilePath = Path.Combine(directory, "settings.json");
+        _log = log ?? AppLog.Write;
     }
 
     public string FilePath { get; }
@@ -44,7 +49,7 @@ public sealed class SettingsStore
         }
         catch (Exception error)
         {
-            AppLog.Write($"settings load failed: {error.Message}");
+            _log($"settings load failed: {error.Message}");
             return new AppSettings();
         }
     }

@@ -7,7 +7,7 @@ namespace Translation.App;
 public sealed class TranslationCore : IDisposable
 {
     private const string Dll = "translation_core";
-    private static readonly int Threads = Math.Clamp(Environment.ProcessorCount, 1, 16);
+    private static readonly int Threads = ResolveThreadCount();
 
     private readonly string _zhEnModel;
     private readonly string _enZhModel;
@@ -112,6 +112,19 @@ public sealed class TranslationCore : IDisposable
                 }
             }
         });
+    }
+
+    private static int ResolveThreadCount()
+    {
+        // 允许通过 OMP_NUM_THREADS 覆盖默认线程数；CTranslate2 收到非零值后
+        // 会直接使用，不再读取该环境变量。
+        if (int.TryParse(Environment.GetEnvironmentVariable("OMP_NUM_THREADS"), out var configured)
+            && configured > 0)
+        {
+            return configured;
+        }
+
+        return Math.Clamp(Environment.ProcessorCount, 1, 16);
     }
 
     private static IntPtr CreateEngine(string modelDirectory)

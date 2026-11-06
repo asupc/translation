@@ -154,7 +154,10 @@ public partial class App : System.Windows.Application
     /// <summary>启动时与空闲释放后（懒）加载翻译模型。</summary>
     private void PreloadCore()
     {
-        if (_coreInitTask is not null || _shuttingDown)
+        // 初始化进行中才提前返回；已完成但未就绪（失败）的任务允许重建。
+        if (_shuttingDown
+            || (_coreInitTask is not null && !_coreInitTask.IsCompleted)
+            || CoreReady)
         {
             return;
         }
