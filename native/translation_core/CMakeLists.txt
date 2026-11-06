@@ -13,6 +13,12 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../third_party/sentencepiece
 # 共享库链接静态 SentencePiece 时必须带 -fPIC（Linux/macOS）。
 set_target_properties(sentencepiece-static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# SentencePiece 只有在定义 UNICODE/_UNICODE 时才把 UTF-8 路径转成宽字符；
+# 否则 Windows 上会按 ANSI 代码页打开 source.spm/target.spm，中文路径失败。
+if(WIN32)
+  target_compile_definitions(sentencepiece-static PRIVATE UNICODE _UNICODE)
+endif()
+
 add_library(translation_core SHARED translation_core.cpp)
 target_include_directories(translation_core PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}

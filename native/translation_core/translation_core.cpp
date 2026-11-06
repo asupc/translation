@@ -1,11 +1,9 @@
 ﻿#include "translation_core.h"
 
-#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -44,8 +42,17 @@ void set_error(char* buffer, int size, const std::string& message) {
   std::snprintf(buffer, static_cast<size_t>(size), "%s", message.c_str());
 }
 
+// 模型目录来自 C# 的 UTF-8 字符串；只做字符串拼接，避免 Windows 上
+// std::filesystem 按 ANSI 代码页转换而损坏中文路径。
 std::string join_path(const std::string& directory, const char* file) {
-  return (std::filesystem::path(directory) / file).string();
+  if (directory.empty()) {
+    return file;
+  }
+  const char last = directory.back();
+  if (last == '/' || last == '\\') {
+    return directory + file;
+  }
+  return directory + "/" + file;
 }
 
 std::string take_error_message(const char* prefix, const std::exception& error) {
