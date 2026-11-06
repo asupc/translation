@@ -28,6 +28,19 @@ if (-not $vsPath) {
 $vsGenerator = if ($vsMajor -ge 18) { 'Visual Studio 18 2026' } else { 'Visual Studio 17 2022' }
 Write-Host "Using CMake generator: $vsGenerator"
 
+# 版本或生成器变化时，缓存里的构建产物必须失效重编；否则会出现新头文件
+# 搭配旧库的不一致（CI 的 restore-keys 也会恢复上一版产物）。
+$ct2Tag = 'v4.8.3'
+$spmTag = 'v0.2.2'
+$dnnlTag = 'v3.13.4'
+$stampPath = Join-Path $build 'native-inputs.txt'
+$stamp = "CTranslate2=$ct2Tag; sentencepiece=$spmTag; oneDNN=$dnnlTag; generator=$vsGenerator"
+$stampMatches = $false
+if (Test-Path $stampPath) {
+    $existingStamp = Get-Content $stampPath -Raw
+    $stampMatches = $existingStamp -and ($existingStamp.Trim() -eq $stamp)
+}
+
 function Initialize-BuildDir {
     param(
         [string]$Dir,
@@ -82,39 +95,50 @@ function Ensure-Repo {
         }
 
         Write-Host "Replacing stale $Path (expected $Branch, found '$current')"
-        Remove-Item $Path -Recurse -Force
     }
     elseif (Test-Path $Path) {
-        # 上次克隆中断的半成品目录：git clone 会因目录非空直接失败，先清理。
+        # 上次克隆中断的半成品目录：git clone 会因目录非空直接失败。
         Write-Host "Removing incomplete $Path"
-        Remove-Item $Path -Recurse -Force
     }
 
+    # 先克隆到临时目录，成功后再替换，避免网络失败把仍可用的源码删掉。
+    $temp = "$Path.tmp-$([Guid]::NewGuid().ToString('N'))"
     $arguments = @('clone', '--depth', '1', '--branch', $Branch)
     if ($Recurse) {
         $arguments += @('--recurse-submodules', '--shallow-submodules')
     }
-    $arguments += @($Url, $Path)
-    Invoke-Checked 'git' $arguments
+    $arguments += @($Url, $temp)
+    try {
+        Invoke-Checked 'git' $arguments
+        if (Test-Path $Path) {
+            Remove-Item $Path -Recurse -Force
+        }
+        Move-Item -Path $temp -Destination $Path
+    }
+    finally {
+        if (Test-Path $temp) {
+            Remove-Item $temp -Recurse -Force
+        }
+    }
 }
 
 Ensure-Repo -Path (Join-Path $thirdParty 'CTranslate2') `
     -Url 'https://github.com/OpenNMT/CTranslate2.git' `
-    -Branch 'v4.8.3' -Recurse
+    -Branch $ct2Tag -Recurse
 
 Ensure-Repo -Path (Join-Path $thirdParty 'sentencepiece') `
     -Url 'https://github.com/google/sentencepiece.git' `
-    -Branch 'v0.2.2'
+    -Branch $spmTag
 
 Ensure-Repo -Path (Join-Path $thirdParty 'oneDNN') `
     -Url 'https://github.com/oneapi-src/oneDNN.git' `
-    -Branch 'v3.13.4' -Recurse
+    -Branch $dnnlTag -Recurse
 
 $dnnlInstall = Join-Path $build 'dnnl-install-omp'
 $dnnlLibrary = Join-Path $dnnlInstall 'lib\dnnl.lib'
 $dnnlRuntime = Join-Path $dnnlInstall 'bin\dnnl.dll'
 $dnnlHeaders = Join-Path $dnnlInstall 'include'
-if ($Force -or -not (Test-Path $dnnlLibrary) -or -not (Test-Path $dnnlRuntime) -or -not (Test-Path $dnnlHeaders)) {
+if ($Force -or -not $stampMatches -or -not (Test-Path $dnnlLibrary) -or -not (Test-Path $dnnlRuntime) -or -not (Test-Path $dnnlHeaders)) {
     Write-Host 'Building oneDNN (OMP)...'
     $dnnlBuild = Join-Path $build 'oneDNN'
     Initialize-BuildDir -Dir $dnnlBuild -Generator $vsGenerator
@@ -148,6 +172,7 @@ $ct2Library = Join-Path $build 'ctranslate2.lib'
 $ct2Runtime = Join-Path $build 'ctranslate2.dll'
 $dnnlRuntimeCopy = Join-Path $build 'dnnl.dll'
 if ($Force -or
+    -not $stampMatches -or
     -not (Test-Path $ct2Library) -or
     -not (Test-Path $ct2Runtime) -or
     -not (Test-Path $dnnlRuntimeCopy)) {
@@ -192,6 +217,8 @@ Invoke-Checked $cmake @(
     '-DCMAKE_BUILD_TYPE=Release'
 )
 Invoke-Checked $cmake @('--build', $coreBuild, '--config', 'Release', '--parallel', "$Jobs")
+
+Set-Content -Path $stampPath -Value $stamp -Encoding ASCII
 
 Write-Host ''
 Write-Host "Native build complete: $build"
