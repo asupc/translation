@@ -20,7 +20,4 @@ dotnet test tests\Translation.App.Tests\Translation.App.Tests.csproj
 
 ## 待补
 
-- `HotkeyDefinition` 解析/格式化
-- `LanguageDetector` 中英混合/日韩文/空文本
-- `SettingsStore` 读写与损坏 JSON 回退
 - 原生核心翻译样本（zh↔en）

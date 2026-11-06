@@ -70,7 +70,8 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void Load_损坏JSON回退默认值()
     {
-        var store = new SettingsStore(_directory);
+        // 用空日志避免写入真实的 %LOCALAPPDATA%\TranslationApp\logs。
+        var store = new SettingsStore(_directory, _ => { });
         File.WriteAllText(store.FilePath, "{ not valid json");
 
         var settings = store.Load();
