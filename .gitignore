@@ -21,6 +21,7 @@ native/third_party/
 models/translation/
 models/ocr/
 models/dictionary/
+models/tts/
 
 # Phase 0 spike artifacts
 spikes/

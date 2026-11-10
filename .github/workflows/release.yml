@@ -107,6 +107,21 @@ jobs:
           }
           Get-ChildItem $dir | Select-Object Name, Length
 
+      # 发音资源：sherpa-onnx 运行时 + KittenTTS 模型 + 英语词典，约 70MB。
+      - uses: actions/cache@v4
+        id: tts-cache
+        with:
+          path: models/tts
+          key: tts-v1-${{ hashFiles('scripts/build-tts.ps1') }}
+
+      - name: Download TTS models
+        if: steps.tts-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\build-tts.ps1 -Force *>&1 | Tee-Object -FilePath tts-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # 翻译模型缓存：转换一次约 10 分钟（含下载原始模型与 pip 依赖）
       - uses: actions/cache@v4
         id: mt-cache
@@ -146,6 +161,7 @@ jobs:
           Copy-Item 'models/ocr/v5' "$staging/models/ocr/v5" -Recurse -Force
           New-Item -ItemType Directory -Force "$staging/models/dictionary" | Out-Null
           Copy-Item 'models/dictionary/ecdict.sqlite' "$staging/models/dictionary/"
+          Copy-Item 'models/tts' "$staging/models/tts" -Recurse -Force
           Copy-Item 'THIRD-PARTY-NOTICES.md' $staging
           $zip = "Translation-win-x64-$version.zip"
           Compress-Archive -Path $staging -DestinationPath $zip
@@ -177,7 +193,7 @@ jobs:
             - [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0)（`arm64` 不支持）
             - [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（提供 `vcomp140.dll`）
 
-            翻译 / OCR / 词典模型已内置，全程离线运行。完整说明见仓库 [README](https://github.com/asupc/translation) 与 `docs/USAGE.md`。第三方组件与模型许可见包内 `THIRD-PARTY-NOTICES.md`。
+            翻译 / OCR / 词典 / 发音模型已内置，全程离线运行。完整说明见仓库 [README](https://github.com/asupc/translation) 与 `docs/USAGE.md`。第三方组件与模型许可见包内 `THIRD-PARTY-NOTICES.md`。
 
       # 必须位于 job 末尾：if: failure() 只对执行时刻之前的步骤生效，
       # 放在最后才能收集任何构建步骤的失败日志
