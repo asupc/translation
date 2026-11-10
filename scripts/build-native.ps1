@@ -1,4 +1,4 @@
-param(
+﻿param(
     [int]$Jobs = 16,
     [switch]$Force
 )

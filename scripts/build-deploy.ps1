@@ -1,4 +1,4 @@
-param(
+﻿param(
     # 部署目标目录；默认为仓库下 publish\deploy
     [string]$Destination,
     [switch]$SkipModels,
@@ -41,7 +41,13 @@ New-Item -ItemType Directory -Force $Destination | Out-Null
 $running = Get-Process -Name $processName -ErrorAction SilentlyContinue
 if ($running) {
     $running | Stop-Process -Force
-    $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+    # 进程被终止后可能短暂仍出现在 Get-Process 中；轮询等待其真正消失，
+    # 否则会在文件尚未释放时误报“无法结束”。
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((Get-Process -Name $processName -ErrorAction SilentlyContinue) -and
+           (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+    }
     $stillRunning = Get-Process -Name $processName -ErrorAction SilentlyContinue
     if ($stillRunning) {
         throw "无法结束正在运行的 $processName，文件可能仍被占用。"
@@ -61,7 +67,7 @@ if (-not $SkipModels) {
 
     $destinationModels = Join-Path $Destination 'models'
     New-Item -ItemType Directory -Force $destinationModels | Out-Null
-    foreach ($name in @('translation', 'ocr', 'dictionary')) {
+    foreach ($name in @('translation', 'ocr', 'dictionary', 'tts')) {
         $source = Join-Path $models $name
         if (-not (Test-Path $source)) {
             Write-Warning "models\$name 不存在，跳过该目录（保留目标目录中的现有内容）。"
