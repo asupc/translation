@@ -38,6 +38,20 @@ PP-OCRv5 中文 mobile（RapidOcrNet 使用）：
 - 基础版 CSV 约 76 万词条，入库时只保留有中文释义的行，并生成变形词 → 原词索引。
 - 不入 git；库文件缺失时查词自动回退句子翻译。
 
+## 发音模型
+
+| 文件 | 用途 | 大小 |
+|---|---|---|
+| tts/bin/sherpa-onnx-offline-tts.exe + DLL | 离线 TTS 推理（独立子进程） | 约 30MB |
+| tts/model/model.onnx | KittenTTS v0.8 micro 英文模型 | 41.4MB |
+| tts/model/voices.bin | 预置音色（8 个） | 3.2MB |
+| tts/model/tokens.txt | 音素表 | 约 1KB |
+| tts/lexicon-en-us.txt | 英语单词 → 音素词典（约 16.7 万词条） | 6.3MB |
+
+- 许可：sherpa-onnx Apache-2.0；KittenTTS Apache-2.0；词典词条源自 CMU Pronouncing Dictionary（BSD-2-Clause）。
+- 由 `scripts/build-tts.ps1` 下载，不入 git；资源缺失时查词仍可用，只是不显示喇叭按钮。
+- 合成时用相对路径启动子进程，因此 `models/tts` 需要可写（用于临时 WAV）。
+
 ## 第三方运行时
 
 | 组件 | 许可证 |
@@ -46,5 +60,7 @@ PP-OCRv5 中文 mobile（RapidOcrNet 使用）：
 | oneDNN | Apache-2.0 |
 | SentencePiece | Apache-2.0 |
 | RapidOcrNet / RapidOCR | Apache-2.0 |
+| sherpa-onnx | Apache-2.0 |
+| ONNX Runtime（随 sherpa-onnx 分发） | MIT |
 
 不要使用 NLLB-200（CC-BY-NC-4.0）做商业分发；当前项目默认不包含该模型。

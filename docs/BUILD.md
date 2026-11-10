@@ -105,7 +105,7 @@ dotnet build src/Translation.App/Translation.App.csproj -c Release
 .\scripts\build-deploy.ps1 -Run   # 同步完成后启动
 ```
 
-脚本使用 `dotnet publish -r win-x64` 生成发布目录，再同步程序文件和 `models/`。`models/translation`、`models/ocr`、`models/dictionary` 分别镜像同步（部署目录中对应子目录的多余文件会被删除）；缺少某个模型目录时保留目标目录现有内容并给出警告。仅需部署程序时用 `-SkipModels`；`models/translation` 与 `models/ocr/v5` 都缺失时会直接报错。
+脚本使用 `dotnet publish -r win-x64` 生成发布目录，再同步程序文件和 `models/`。`models/translation`、`models/ocr`、`models/dictionary`、`models/tts` 分别镜像同步（部署目录中对应子目录的多余文件会被删除）；缺少某个模型目录时保留目标目录现有内容并给出警告。仅需部署程序时用 `-SkipModels`；`models/translation` 与 `models/ocr/v5` 都缺失时会直接报错。
 
 ## 模型
 
@@ -115,6 +115,7 @@ dotnet build src/Translation.App/Translation.App.csproj -c Release
 models/translation/opus-mt-zh-en-int8/
 models/translation/opus-mt-en-zh-int8/
 models/ocr/v5/
+models/tts/
 ```
 
 ### 翻译模型转换
@@ -151,6 +152,31 @@ https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/paddle/PP-OCRv
 
 下载 ECDICT 基础版 CSV（约 66MB，https://github.com/skywind3000/ecdict ，MIT 许可）并转换为 `models/dictionary/ecdict.sqlite`。`-CsvPath` 可指定已手动下载的 CSV，`-Force` 重新下载。需要 Python 3.10+。不构建词典数据时，查单个单词自动回退句子翻译。
 
+## 发音模型（TTS）
+
+```powershell
+.\scripts\build-tts.ps1          # 下载并解压，约 70MB
+.\scripts\build-tts.ps1 -Force   # 强制重新下载
+```
+
+脚本从 sherpa-onnx 发布页下载 Windows 运行时（`sherpa-onnx-offline-tts.exe` + DLL）、KittenTTS v0.8 micro 英文模型和通用英语词典，放入 `models/tts/`：
+
+```
+models/tts/
+  bin/sherpa-onnx-offline-tts.exe + DLL
+  model/model.onnx, voices.bin, tokens.txt
+  lexicon-en-us.txt
+```
+
+发音在独立子进程中运行，不依赖主进程的 ONNX Runtime。资源缺失时查词仍正常，只是不显示喇叭按钮。合成时通过相对路径调用子进程，因此安装/部署目录需要可写（用于生成临时 WAV）。每次点击需启动子进程并加载模型，实测约 1–1.5 秒（首次可能接近 2 秒）。
+
+GitHub 访问不稳定时可先设置代理再运行（`curl.exe` 会读取该变量）：
+
+```powershell
+$env:HTTPS_PROXY = 'http://127.0.0.1:7890'
+.\scripts\build-tts.ps1 -Force
+```
+
 ## 运行
 
 ```powershell
@@ -168,5 +194,6 @@ $env:TRANSLATION_MODELS_DIR = "<仓库根目录>\models"
 - **热键注册失败**：被其他程序占用；在托盘“设置”中更换，默认 `Ctrl+Alt+F9`。
 - **模型加载失败**：检查 `models/translation/.../model.bin`、`source.spm`、`target.spm` 是否存在；启动日志 `%LOCALAPPDATA%\TranslationApp\logs\app.log` 会记录具体路径与原生错误。
 - **OCR 失败**：检查 `models/ocr/v5/` 四个文件是否齐全，字典与识别模型必须匹配。RapidOcrNet 依赖的 ONNX Runtime / SkiaSharp 由 NuGet 自动还原，无需单独安装。
+- **发音按钮不显示**：`models/tts/` 不完整，运行 `scripts\build-tts.ps1`；发音失败的具体原因记录在 `%LOCALAPPDATA%\TranslationApp\logs\app.log`。
 - **DLL 找不到**：确认 `translation_core.dll`、`ctranslate2.dll`、`dnnl.dll` 都在应用输出目录；`vcomp140.dll` 由 VC++ 运行库提供。`scripts\build-app.ps1` 会在构建前检查这三个 DLL。
 - **性能明显偏慢**：确认 CT2 使用 DNNL 且 `OPENMP_RUNTIME=COMP`；线程数默认取 `Environment.ProcessorCount`（上限 16），也可在启动前设置环境变量 `OMP_NUM_THREADS` 覆盖 oneDNN 的线程池。

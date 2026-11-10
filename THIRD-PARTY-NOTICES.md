@@ -11,6 +11,8 @@
 | SentencePiece | Apache-2.0 | https://github.com/google/sentencepiece |
 | RapidOcrNet / RapidOCR | Apache-2.0 | https://github.com/RapidAI/RapidOcrNet |
 | SkiaSharp | MIT | https://github.com/mono/SkiaSharp |
+| sherpa-onnx（发音子进程） | Apache-2.0 | https://github.com/k2-fsa/sherpa-onnx |
+| ONNX Runtime（随 sherpa-onnx 分发） | MIT | https://github.com/microsoft/onnxruntime |
 | .NET / WPF | MIT | https://github.com/dotnet/runtime |
 
 ## 翻译模型
@@ -27,6 +29,15 @@
 | 文件 | 许可证 | 来源 |
 |---|---|---|
 | PP-OCRv5 中文 mobile（det / cls / rec / dict） | Apache-2.0 | https://www.modelscope.cn/models/RapidAI/RapidOCR |
+
+## 发音模型
+
+| 资源 | 许可证 | 来源 |
+|---|---|---|
+| KittenTTS v0.8（micro，英文） | Apache-2.0 | https://github.com/KittenML/KittenTTS |
+| lexicon-en-us.txt | Apache-2.0（词条源自 CMU Pronouncing Dictionary，BSD-2-Clause） | https://github.com/k2-fsa/sherpa-onnx |
+
+发音模型由 `scripts/build-tts.ps1` 从 sherpa-onnx 发布页下载并随程序分发；合成通过独立的 sherpa-onnx CLI 子进程完成。
 
 ## 词典数据
 

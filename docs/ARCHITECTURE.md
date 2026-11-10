@@ -70,10 +70,18 @@ void translation_engine_destroy(TranslationEngine* engine);
 - 变形词（classes / running / went）经 `inflections` 还原到原词条目展示，并附「classes 是 class 的名词复数」提示。
 - 词条区分大小写（China=中国 / china=瓷器）；全大写输入按大小写不敏感匹配，并按 ECDICT `frq` 词频排名取更常用的候选（`frq` 越小越常用）。
 
+### 发音
+
+- 两个入口触发 `PronunciationService`：词典词条旁的喇叭按钮（朗读原词，变形词已还原），以及中译英结果旁的喇叭按钮（朗读整个英文译文）。按钮仅在发音资源就绪时显示。
+- 合成走独立子进程 `models/tts/bin/sherpa-onnx-offline-tts.exe`（sherpa-onnx CLI + KittenTTS 模型 + 英语词典），避免与主进程 ONNX Runtime 版本冲突；子进程按需启动，不常驻内存。
+- 为规避 Windows 窄字符 argv 对中文路径的影响，工作目录设为 `models/tts`，模型与输出参数全部使用相对 ASCII 路径；临时 WAV 写在该目录，播放结束或窗口隐藏/退出时删除。
+- 播放使用 WPF `MediaPlayer`；连点会终止上一次子进程，窗口隐藏、切换查询与退出应用时停止播放。
+
 ## 线程与生命周期
 
-- UI 线程：窗口、托盘、热键消息、剪切板。
+- UI 线程：窗口、托盘、热键消息、剪切板、发音播放。
 - 后台线程：原生翻译（P/Invoke 阻塞）、OCR 推理、模型加载。
+- 发音子进程：点击按钮时启动，合成结束后退出；不参与空闲释放，窗口隐藏/退出时由 `PronunciationService.Stop()` 终止。
 - 翻译/OCR 请求在同一时间通常只有一个；核心内部串行化，避免 CPU 争抢。
 - 启动顺序：
   1. 单实例 Mutex / 唤醒事件
