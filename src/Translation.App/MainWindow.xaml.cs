@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Button = System.Windows.Controls.Button;
 
 namespace Translation.App;
 
@@ -227,6 +229,8 @@ public partial class MainWindow : Window
 
             UpdateDirection();
             StatusText.Text = "翻译中…";
+            _app.Pronunciation.Stop();
+            SpeakResultButton.Visibility = Visibility.Collapsed;
             var stopwatch = Stopwatch.StartNew();
 
             // 单个英文单词优先走离线词典（不依赖翻译模型加载）；未命中回退句子翻译。
@@ -250,6 +254,13 @@ public partial class MainWindow : Window
                 ShowResultPanel();
                 ResultBox.Text = translated;
                 ResultBox.ScrollToHome();
+                if (language == DetectedLanguage.Chinese
+                    && !string.IsNullOrWhiteSpace(translated)
+                    && _app.Pronunciation.IsAvailable)
+                {
+                    SpeakResultButton.Visibility = Visibility.Visible;
+                }
+
                 stopwatch.Stop();
 
                 var direction = language == DetectedLanguage.Chinese ? "中 → 英" : "英 → 中";
@@ -287,6 +298,8 @@ public partial class MainWindow : Window
 
     private void ShowDictionaryEntry(DictionaryEntry entry)
     {
+        _app.Pronunciation.Stop();
+        SpeakResultButton.Visibility = Visibility.Collapsed;
         ResultLabel.Text = "词典";
         ResultBox.Visibility = Visibility.Collapsed;
         DictionaryPanel.Visibility = Visibility.Visible;
@@ -295,8 +308,52 @@ public partial class MainWindow : Window
         DictionaryPanel.Document = BuildDocument(entry);
     }
 
+    /// <summary>点击喇叭：合成并播放单词发音；期间禁用按钮并提示状态。</summary>
+    private async Task SpeakPronunciationAsync(string text, Button button)
+    {
+        var previousStatus = StatusText.Text;
+        StatusText.Text = "朗读中…";
+        button.IsEnabled = false;
+        try
+        {
+            await _app.Pronunciation.SpeakAsync(text);
+            if (StatusText.Text == "朗读中…")
+            {
+                StatusText.Text = previousStatus;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (StatusText.Text == "朗读中…")
+            {
+                StatusText.Text = previousStatus;
+            }
+        }
+        catch (Exception error)
+        {
+            var message = error.Message;
+            var lineBreak = message.IndexOfAny(['\r', '\n']);
+            if (lineBreak >= 0)
+            {
+                message = message[..lineBreak];
+            }
+
+            StatusText.Text = $"发音失败: {(message.Length > 80 ? message[..80] + "…" : message)}";
+            Log($"tts failed: {message}");
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
+    }
+
+    private void SpeakResult_Click(object sender, RoutedEventArgs e)
+    {
+        _ = SpeakPronunciationAsync(ResultBox.Text, SpeakResultButton);
+    }
+
     /// <summary>把词条渲染为富文本文档；富文本支持用户自由拖选复制。</summary>
-    private static FlowDocument BuildDocument(DictionaryEntry entry)
+    private FlowDocument BuildDocument(DictionaryEntry entry)
     {
         var document = new FlowDocument
         {
@@ -317,6 +374,22 @@ public partial class MainWindow : Window
             {
                 FontSize = 13,
                 Foreground = ThemeBrush("#9A9A9A"),
+            });
+        }
+
+        if (_app.Pronunciation.IsAvailable)
+        {
+            header.Inlines.Add(new Run("  "));
+            var speakButton = new Button
+            {
+                Content = "\uE767",
+                Style = (Style)FindResource("SpeakButton"),
+            };
+            AutomationProperties.SetName(speakButton, "朗读发音");
+            speakButton.Click += async (_, _) => await SpeakPronunciationAsync(entry.Word, speakButton);
+            header.Inlines.Add(new InlineUIContainer(speakButton)
+            {
+                BaselineAlignment = BaselineAlignment.Center,
             });
         }
 
@@ -422,6 +495,8 @@ public partial class MainWindow : Window
 
     private void ShowResultPanel()
     {
+        _app.Pronunciation.Stop();
+        SpeakResultButton.Visibility = Visibility.Collapsed;
         ResultLabel.Text = "译文";
         ResultBox.Visibility = Visibility.Visible;
         DictionaryPanel.Visibility = Visibility.Collapsed;
@@ -483,6 +558,7 @@ public partial class MainWindow : Window
 
     private void HideWindow()
     {
+        _app.Pronunciation.Stop();
         _app.SaveWindowState();
         Hide();
         _app.OnMainWindowHidden();

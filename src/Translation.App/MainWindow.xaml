@@ -49,6 +49,17 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- 词典词条旁的发音按钮：内嵌在 FlowDocument 中，保持深色紧凑外观 -->
+        <Style x:Key="SpeakButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+            <Setter Property="Foreground" Value="#9A9A9A" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="ToolTip" Value="朗读发音" />
+        </Style>
         <!-- 深色细滚动条：隐式作用于窗口内所有滚动区域（输入框 / 译文框 / 词典） -->
         <Style TargetType="Thumb">
             <Setter Property="IsTabStop" Value="False" />
@@ -204,6 +215,18 @@
                        Foreground="#8C8C8C"
                        FontSize="12"
                        Margin="0,6,0,4" />
+            <!-- 中译英结果旁的朗读按钮；仅在译文为英文且发音资源可用时显示 -->
+            <Button x:Name="SpeakResultButton"
+                    Grid.Row="4"
+                    Content="&#xE767;"
+                    Style="{StaticResource SpeakButton}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Margin="0,4,0,0"
+                    Visibility="Collapsed"
+                    ToolTip="朗读译文"
+                    AutomationProperties.Name="朗读译文"
+                    Click="SpeakResult_Click" />
             <Grid Grid.Row="5">
                 <TextBox x:Name="ResultBox"
                          MinHeight="70"

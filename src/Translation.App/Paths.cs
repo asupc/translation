@@ -13,6 +13,8 @@ internal static class Paths
 
     public static string DictionaryDatabase => Path.Combine(ModelsRoot, "dictionary", "ecdict.sqlite");
 
+    public static string TtsDirectory => Path.Combine(ModelsRoot, "tts");
+
     private static string ResolveModelsRoot()
     {
         var overridePath = Environment.GetEnvironmentVariable("TRANSLATION_MODELS_DIR");

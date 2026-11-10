@@ -36,6 +36,9 @@ public partial class App : System.Windows.Application
     /// <summary>离线词典（ECDICT SQLite）；库文件缺失时查询返回 null，自动回退句子翻译。</summary>
     public DictionaryService Dictionary { get; } = new(Paths.DictionaryDatabase);
 
+    /// <summary>离线英文单词发音；TTS 资源缺失时 IsAvailable 为 false。</summary>
+    public PronunciationService Pronunciation { get; } = new(Paths.TtsDirectory);
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -634,6 +637,7 @@ public partial class App : System.Windows.Application
         }
 
         Dictionary.Dispose();
+        Pronunciation.Dispose();
 
         if (_instanceMutex is not null)
         {
